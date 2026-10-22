@@ -57,6 +57,18 @@ public static class ProcessRunner
 
 public sealed class EngineException(string message) : Exception(message);
 
+public sealed record ModelOption(string Id, string Label)
+{
+    public override string ToString() => Label;
+
+    public static string Resolve(IEnumerable<ModelOption> options, string text)
+    {
+        string value = text.Trim();
+        return options.FirstOrDefault(option => option.Label.Equals(value, StringComparison.OrdinalIgnoreCase)
+            || option.Id.Equals(value, StringComparison.OrdinalIgnoreCase))?.Id ?? value;
+    }
+}
+
 public static class EngineCli
 {
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(60);
@@ -140,14 +152,22 @@ public static class EngineCli
         return Truncate(end > start ? line[start..end] : line[start..]);
     }
 
-    public static IReadOnlyList<string> SuggestedModels(Provider provider) => provider switch
+    public static readonly IReadOnlyList<ModelOption> ClaudeModels =
+    [
+        new("claude-haiku-5-5", "Haiku 5.5"),
+        new("claude-sonnet-5-5", "Sonnet 5.5"),
+        new("claude-opus-5-5", "Opus 5.5"),
+        new("claude-fable-5", "Fable 5"),
+    ];
+
+    public static IReadOnlyList<ModelOption> SuggestedModels(Provider provider) => provider switch
     {
-        Provider.Claude => ["haiku", "sonnet", "opus", "claude-haiku-5-5"],
-        Provider.Codex => CachedCodexModels() is { Count: > 0 } models ? models : [AppSettings.DefaultCodexModel],
+        Provider.Claude => ClaudeModels,
+        Provider.Codex => CachedCodexModels() is { Count: > 0 } models ? models : [new(AppSettings.DefaultCodexModel, "GPT-5.6-Luna")],
         _ => [],
     };
 
-    public static IReadOnlyList<string> ParseCodexModels(string json)
+    public static IReadOnlyList<ModelOption> ParseCodexModels(string json)
     {
         try
         {
@@ -156,10 +176,12 @@ public static class EngineCli
             return models.EnumerateArray()
                 .Where(model => model.ValueKind == JsonValueKind.Object
                     && (!model.TryGetProperty("visibility", out var visibility) || visibility.GetString() == "list"))
-                .Select(model => model.TryGetProperty("slug", out var slug) ? slug.GetString() : null)
-                .OfType<string>()
-                .Where(AppSettings.IsValidModel)
-                .Distinct()
+                .Select(model => (
+                    Id: model.TryGetProperty("slug", out var slug) ? slug.GetString() : null,
+                    Label: model.TryGetProperty("display_name", out var name) ? name.GetString() : null))
+                .Where(model => AppSettings.IsValidModel(model.Id))
+                .DistinctBy(model => model.Id)
+                .Select(model => new ModelOption(model.Id!, string.IsNullOrWhiteSpace(model.Label) ? model.Id! : model.Label))
                 .ToArray();
         }
         catch (JsonException)
@@ -168,7 +190,7 @@ public static class EngineCli
         }
     }
 
-    private static IReadOnlyList<string> CachedCodexModels()
+    private static IReadOnlyList<ModelOption> CachedCodexModels()
     {
         string home = Environment.GetEnvironmentVariable("CODEX_HOME") is { Length: > 0 } custom
             ? custom

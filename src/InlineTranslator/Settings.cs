@@ -9,12 +9,9 @@ public enum Provider { None, Claude, Codex }
 
 public sealed record EngineChoice(Provider Provider, string Model)
 {
-    public string DisplayName => Provider switch
-    {
-        Provider.Claude => "Claude · " + Model,
-        Provider.Codex => "Codex · " + Model,
-        _ => "",
-    };
+    public string DisplayName => Provider == Provider.None ? "" :
+        (Provider == Provider.Claude ? "Claude · " : "Codex · ")
+        + (EngineCli.SuggestedModels(Provider).FirstOrDefault(option => option.Id == Model)?.Label ?? Model);
 }
 
 public sealed record HotkeyPreset(bool Enabled, string Hotkey, string TargetLanguage);
@@ -24,7 +21,7 @@ public sealed record AppSettings
     public const int PresetCount = 3;
     public static readonly string[] UiLanguages = ["ko", "en", "zh-CN", "ja"];
     public static readonly string[] Tones = ["natural", "casual", "formal"];
-    public const string DefaultClaudeModel = "haiku";
+    public const string DefaultClaudeModel = "claude-haiku-5-5";
     public const string DefaultCodexModel = "gpt-5.6-luna";
 
     public static readonly IReadOnlyList<HotkeyPreset> DefaultPresets =

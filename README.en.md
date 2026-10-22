@@ -20,7 +20,7 @@ Now it is **one hotkey, right where you are typing**. In a few seconds your text
 ## Features
 
 - **No API key** — uses the Claude Code or Codex subscription you already have.
-- **Pick the model** — Haiku, Sonnet, Opus, GPT models, or any model name you type.
+- **Pick the model** — Haiku 5.5, Sonnet 5.5, Opus 5.5, Fable 5, GPT models, or any model name you type.
 - **Fallback engine** — if the main engine fails, the backup takes over automatically.
 - **19 languages** — English, Korean, Japanese, Chinese (Simplified and Traditional), Spanish, French, German, Portuguese, Italian, Russian, Vietnamese, Thai, Indonesian, Arabic, Hindi, Turkish, Dutch and Polish. The source language is detected automatically.
 - **Three hotkeys** — for example `Ctrl+Alt+T` for English and `Ctrl+Alt+J` for Japanese.

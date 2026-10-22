@@ -27,6 +27,7 @@ internal static class Program
             ("translator treats empty output as failure and lets cancellation through", TranslatorEdgeCases),
             ("CLI arguments keep sessions unsaved and tools disabled", EngineArguments),
             ("Codex model cache parsing", CodexModels),
+            ("model labels resolve to model IDs", ModelLabels),
             ("Codex errors expose only the ERROR message", CodexErrors),
             ("process runner passes stdin and returns exit codes", ProcessRoundtrip),
             ("process runner kills the CLI on timeout", ProcessTimeout),
@@ -88,7 +89,7 @@ internal static class Program
         Equal(3, settings.Presets.Count);
         Equal(new HotkeyPreset(true, "Ctrl+Alt+T", "en"), settings.Presets[0]);
         Check(!settings.Presets[1].Enabled && !settings.Presets[2].Enabled, "only the first preset is on");
-        Equal(new EngineChoice(Provider.Claude, "haiku"), settings.Primary);
+        Equal(new EngineChoice(Provider.Claude, "claude-haiku-5-5"), settings.Primary);
         Equal(new EngineChoice(Provider.Codex, "gpt-5.6-luna"), settings.Fallback);
         Check(settings.WholeInputApps.Contains("Telegram"), "Telegram translates the whole input");
         Check(settings.CheckForUpdates && settings.AutoInstallUpdates, "updates on by default");
@@ -100,7 +101,7 @@ internal static class Program
         {
             UiLanguage = "KO",
             Primary = new EngineChoice(Provider.None, ""),
-            Fallback = new EngineChoice(Provider.Claude, "haiku"),
+            Fallback = new EngineChoice(Provider.Claude, "claude-haiku-5-5"),
             Presets =
             [
                 new(true, "ctrl+alt+t", "FR"),
@@ -113,7 +114,7 @@ internal static class Program
         }.Normalize();
 
         Equal("ko", settings.UiLanguage);
-        Equal(new EngineChoice(Provider.Claude, "haiku"), settings.Primary);
+        Equal(new EngineChoice(Provider.Claude, "claude-haiku-5-5"), settings.Primary);
         Equal(Provider.None, settings.Fallback.Provider);
         Equal(3, settings.Presets.Count);
         Equal(new HotkeyPreset(true, "Ctrl+Alt+T", "fr"), settings.Presets[0]);
@@ -272,12 +273,24 @@ internal static class Program
     private static void CodexModels()
     {
         string json = """
-            {"models":[{"slug":"gpt-6.1-sol","visibility":"list"},{"slug":"codex-auto-review","visibility":"hide"},
+            {"models":[{"slug":"gpt-6.1-sol","display_name":"GPT-6.1-Sol","visibility":"list"},{"slug":"codex-auto-review","visibility":"hide"},
             {"slug":"gpt-5.6-luna"},{"slug":"bad slug","visibility":"list"},{"visibility":"list"},{"slug":"gpt-6.1-sol","visibility":"list"}]}
             """;
-        Equal("gpt-6.1-sol,gpt-5.6-luna", string.Join(",", EngineCli.ParseCodexModels(json)));
+        var models = EngineCli.ParseCodexModels(json);
+        Equal("gpt-6.1-sol,gpt-5.6-luna", string.Join(",", models.Select(model => model.Id)));
+        Equal("GPT-6.1-Sol,gpt-5.6-luna", string.Join(",", models.Select(model => model.Label)));
         Equal(0, EngineCli.ParseCodexModels("{oops").Count);
         Equal(0, EngineCli.ParseCodexModels("""{"models":{}}""").Count);
+    }
+
+    private static void ModelLabels()
+    {
+        Equal("Haiku 5.5,Sonnet 5.5,Opus 5.5,Fable 5", string.Join(",", EngineCli.ClaudeModels));
+        Equal("claude-sonnet-5-5", ModelOption.Resolve(EngineCli.ClaudeModels, " sonnet 5.5 "));
+        Equal("claude-opus-5-5", ModelOption.Resolve(EngineCli.ClaudeModels, "claude-opus-5-5"));
+        Equal("claude-haiku-4-5", ModelOption.Resolve(EngineCli.ClaudeModels, "claude-haiku-4-5"));
+        Equal("Claude · Haiku 5.5", new EngineChoice(Provider.Claude, "claude-haiku-5-5").DisplayName);
+        Equal("Claude · opus", new EngineChoice(Provider.Claude, "opus").DisplayName);
     }
 
     private static void CodexErrors()
@@ -324,7 +337,7 @@ internal static class Program
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://github.com/a","assets":[{"name":"inline-translator-win-x64.zip","browser_download_url":"https://github.com/x"}]}""")!.PackageUrl is null, "no digest means no automatic install");
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://evil.example/"}""") is null, "non-GitHub page rejected");
         Check(Parse("""{"tag_name":"latest","html_url":"https://github.com/a"}""") is null, "non-version tag rejected");
-        Equal(new Version(0, 1, 0), UpdateChecker.Current);
+        Equal(new Version(0, 1, 1), UpdateChecker.Current);
     }
 
     private static void UpdateInstall()

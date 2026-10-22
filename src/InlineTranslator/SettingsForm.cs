@@ -294,7 +294,7 @@ internal sealed class SettingsForm : Form
         public EngineChoice Get()
         {
             var selected = SelectedProvider;
-            string value = model.Text.Trim();
+            string value = ModelOption.Resolve(model.Items.OfType<ModelOption>(), model.Text);
             return new EngineChoice(selected, selected == Provider.None ? "" : AppSettings.IsValidModel(value) ? value : AppSettings.DefaultModel(selected));
         }
 
@@ -308,8 +308,11 @@ internal sealed class SettingsForm : Form
                 model.Text = "";
                 return;
             }
-            model.Items.AddRange([.. EngineCli.SuggestedModels(choice)]);
-            model.Text = selected;
+            var options = EngineCli.SuggestedModels(choice);
+            model.Items.AddRange([.. options]);
+            var match = options.FirstOrDefault(option => option.Id.Equals(selected, StringComparison.OrdinalIgnoreCase));
+            if (match is not null) model.SelectedItem = match;
+            else model.Text = selected;
         }
     }
 }
