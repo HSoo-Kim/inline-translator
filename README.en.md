@@ -76,6 +76,7 @@ Built for Windows 11 x64. The executable includes .NET, so nothing else to insta
 
 ## Good to know
 
+- **PDF**: if an editing toolbar pops up when you drag-select, press `Esc` to close it, then press the hotkey to translate.
 - Tested with Claude Code 2.1.300 and Codex CLI 0.153.2. Much older versions may lack some options.
 - Some apps (code editors, for example) copy the whole line when you press `Ctrl+C` with nothing selected. Select the text first there.
 - Windows does not allow pasting into windows running as administrator.
