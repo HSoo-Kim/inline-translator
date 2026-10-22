@@ -56,14 +56,15 @@ internal static class Program
             Console.WriteLine($"{path} {form.Width}x{form.Height}");
             form.Close();
         }
-        using (var bubble = new TranslationBubble())
+        foreach (bool dark in new[] { false, true })
         {
-            bubble.ShowNear(new Point(200, 200), "English · Claude · Haiku 5.5",
-                "I'll send the meeting materials by 3 PM tomorrow.", new UiText("ko").T("Read-only text · press any key or click to close"));
+            using var bubble = new TranslationBubble();
+            bubble.ShowAt(new Rectangle(200, 200, 120, 20), "English · Claude · Haiku 5.5",
+                "I'll send the meeting materials by 3 PM tomorrow.", new UiText("ko").T("Read-only text · press any key or click to close"), dark);
             Application.DoEvents();
             using var bitmap = new Bitmap(bubble.Width, bubble.Height);
             bubble.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bubble.Size));
-            string path = Path.Combine(folder, "..", "..", "artifacts", "bubble-ko.png");
+            string path = Path.Combine(folder, "..", "..", "artifacts", dark ? "bubble-dark.png" : "bubble-light.png");
             bitmap.Save(path);
             Console.WriteLine($"{path} {bubble.Width}x{bubble.Height}");
         }
@@ -80,6 +81,15 @@ internal static class Program
             locked.Focus();
             Application.DoEvents();
             Console.WriteLine($"focus read-only -> readOnly={FocusInspector.IsReadOnly(form.Handle)}");
+            locked.Select(5, 4);
+            Application.DoEvents();
+            var field = locked.RectangleToScreen(locked.ClientRectangle);
+            Rectangle? found = null;
+            var worker = new Thread(() => found = SelectionLocator.Find(form.Handle, error => Console.WriteLine("selection error: " + error), step => Console.WriteLine("selection step: " + step)));
+            worker.SetApartmentState(ApartmentState.MTA);
+            worker.Start();
+            while (!worker.Join(20)) Application.DoEvents();
+            Console.WriteLine($"same-process selection rect={found?.ToString() ?? "none"} textbox={field}");
         }
         using (var picker = new AppPicker(new UiText("ko"), ["Telegram", "KakaoTalk"]))
         {

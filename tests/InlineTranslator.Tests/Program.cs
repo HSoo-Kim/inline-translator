@@ -30,6 +30,7 @@ internal static class Program
             ("model labels resolve to model IDs", ModelLabels),
             ("sign-in status parsing and sign-in error detection", SignInStatus),
             ("app catalog keeps real apps and merges running ones", AppCatalogMerge),
+            ("bubble sits right under the selection, or above it near the screen bottom", BubblePlacement),
             ("Codex errors expose only the ERROR message", CodexErrors),
             ("process runner passes stdin and returns exit codes", ProcessRoundtrip),
             ("process runner kills the CLI on timeout", ProcessTimeout),
@@ -112,6 +113,7 @@ internal static class Program
                 new(true, "Ctrl+Alt+Z", "es"),
             ],
             Tone = "angry",
+            BubbleTheme = "neon",
             WholeInputApps = ["Telegram.exe", "telegram", " Slack ", "bad|name", ""],
         }.Normalize();
 
@@ -123,6 +125,7 @@ internal static class Program
         Equal(new HotkeyPreset(false, "Ctrl+Alt+T", "de"), settings.Presets[1]);
         Equal(new HotkeyPreset(false, "", "en"), settings.Presets[2]);
         Equal("natural", settings.Tone);
+        Equal("light", settings.BubbleTheme);
         Equal("Telegram,Slack", string.Join(",", settings.WholeInputApps));
 
         var models = new AppSettings
@@ -146,6 +149,7 @@ internal static class Program
             Presets = [new(true, "Ctrl+Alt+E", "zh-TW"), new(true, "Ctrl+Shift+F9", "ko"), new(false, "", "ar")],
             WholeInputApps = ["카카오톡", "Telegram"],
             Tone = "formal",
+            BubbleTheme = "dark",
             CheckForUpdates = false,
         }.Normalize();
         SettingsStore.Save(path, settings);
@@ -155,6 +159,7 @@ internal static class Program
         Check(settings.Presets.SequenceEqual(loaded.Presets), "presets survive");
         Check(settings.WholeInputApps.SequenceEqual(loaded.WholeInputApps), "Unicode app names survive");
         Equal("formal", loaded.Tone);
+        Equal("dark", loaded.BubbleTheme);
         Check(!loaded.CheckForUpdates, "booleans survive");
         Equal(1, Directory.GetFiles(Path.GetDirectoryName(path)!).Length);
         Check(File.ReadAllText(path).Contains("\"Codex\""), "providers are stored as names");
@@ -348,6 +353,20 @@ internal static class Program
         Check(merged.Take(2).All(app => app.Running), "running apps first");
     }
 
+    private static void BubblePlacement()
+    {
+        var union = BubbleLayout.Union([new System.Drawing.RectangleF(100, 200, 300, 20), new System.Drawing.RectangleF(80, 222, 120, 20)]);
+        Equal(System.Drawing.Rectangle.FromLTRB(80, 200, 400, 242), union!.Value);
+        Check(BubbleLayout.Union([]) is null, "no boxes means unknown selection");
+        var area = new System.Drawing.Rectangle(0, 0, 1920, 1040);
+        var size = new System.Drawing.Size(400, 100);
+        Equal(new System.Drawing.Point(80, 250), BubbleLayout.Placement(union.Value, size, area, 8));
+        var low = System.Drawing.Rectangle.FromLTRB(300, 980, 500, 1000);
+        Equal(new System.Drawing.Point(300, 872), BubbleLayout.Placement(low, size, area, 8));
+        var right = System.Drawing.Rectangle.FromLTRB(1800, 100, 1900, 120);
+        Equal(new System.Drawing.Point(1512, 128), BubbleLayout.Placement(right, size, area, 8));
+    }
+
     private static void CodexErrors()
     {
         string stderr = "user\n안녕하세요 비밀 메시지\nERROR: {\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'gpt-6-luna' model is not supported.\"}}\n";
@@ -392,7 +411,7 @@ internal static class Program
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://github.com/a","assets":[{"name":"inline-translator-win-x64.zip","browser_download_url":"https://github.com/x"}]}""")!.PackageUrl is null, "no digest means no automatic install");
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://evil.example/"}""") is null, "non-GitHub page rejected");
         Check(Parse("""{"tag_name":"latest","html_url":"https://github.com/a"}""") is null, "non-version tag rejected");
-        Equal(new Version(0, 1, 4), UpdateChecker.Current);
+        Equal(new Version(0, 1, 5), UpdateChecker.Current);
     }
 
     private static void UpdateInstall()

@@ -190,7 +190,9 @@ internal sealed class TrayApp : ApplicationContext
             }
 
             bool readOnly = mode == CaptureMode.Selection && FocusInspector.IsReadOnly(window);
-            indicator.ShowNear(ForegroundWindow.CaretOrCursor(window), text.T("Translating to {0}…", target.NativeName));
+            Rectangle? selection = mode == CaptureMode.Selection ? SelectionLocator.Find(window) : null;
+            var anchor = ForegroundWindow.CaretOrCursor(window);
+            indicator.ShowNear(selection is { } box ? new Point(box.Left, box.Bottom) : anchor, text.T("Translating to {0}…", target.NativeName));
             var result = await translator.TranslateAsync(settings, target, copied, CancellationToken.None);
             indicator.Hide();
             if (result.PrimaryError is { } primaryError)
@@ -203,8 +205,8 @@ internal sealed class TrayApp : ApplicationContext
 
             if (readOnly)
             {
-                bubble.ShowNear(Cursor.Position, $"{target.NativeName} · {result.Engine.DisplayName}", result.Text,
-                    text.T("Read-only text · press any key or click to close"));
+                bubble.ShowAt(selection ?? new Rectangle(anchor.X, anchor.Y - 18, 1, 20), $"{target.NativeName} · {result.Engine.DisplayName}", result.Text,
+                    text.T("Read-only text · press any key or click to close"), settings.BubbleTheme == "dark");
                 return;
             }
 

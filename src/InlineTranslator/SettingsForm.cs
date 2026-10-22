@@ -15,6 +15,7 @@ internal sealed class SettingsForm : Form
     private readonly List<(ToggleSwitch Enabled, HotkeyBox Hotkey, PillDropdown Language)> presets = [];
     private readonly PillDropdown tone = new(190);
     private readonly PillDropdown uiLanguage = new(160);
+    private readonly PillDropdown bubbleTheme = new(260);
     private readonly FlowLayoutPanel appChips = new()
     {
         AutoSize = true,
@@ -135,6 +136,10 @@ internal sealed class SettingsForm : Form
         page.Controls.Add(appsCard.Panel);
 
         var generalCard = Card(text.T("General"), null);
+        var bubbleRow = new FlowRow { Margin = new Padding(0, 4, 0, 6) };
+        bubbleTheme.SetOptions(new (object, string)[] { ("light", text.T("White background, black text")), ("dark", text.T("Black background, white text")) });
+        bubbleRow.Controls.AddRange([Ui.Text(text.T("Read-only translation bubble"), Ui.Ink), bubbleTheme]);
+        generalCard.Controls.Add(bubbleRow);
         generalCard.Controls.Add(startWithWindows);
         generalCard.Controls.Add(checkForUpdates);
         generalCard.Controls.Add(autoInstall);
@@ -279,6 +284,7 @@ internal sealed class SettingsForm : Form
             presets[i].Hotkey.ForeColor = preset.Enabled ? Ui.Ink : Ui.Gray;
         }
         tone.Select(settings.Tone);
+        bubbleTheme.Select(settings.BubbleTheme);
         uiLanguage.Select(settings.UiLanguage);
         wholeInputApps.AddRange(settings.WholeInputApps);
         ShowApps();
@@ -327,6 +333,7 @@ internal sealed class SettingsForm : Form
         Presets = presets.Select(row => new HotkeyPreset(row.Enabled.Checked, row.Hotkey.GetHotkey()?.ToString() ?? "",
             row.Language.SelectedValue as string ?? "en")).ToArray(),
         Tone = tone.SelectedValue as string ?? "natural",
+        BubbleTheme = bubbleTheme.SelectedValue as string ?? "light",
         WholeInputApps = wholeInputApps.ToArray(),
         UiLanguage = uiLanguage.SelectedValue as string ?? "",
         CheckForUpdates = checkForUpdates.Checked,

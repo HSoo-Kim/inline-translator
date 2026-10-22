@@ -5,10 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Version>0.1.4</Version>
+    <Version>0.1.5</Version>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/InlineTranslator/AppCatalog.cs" Link="AppCatalog.cs" />
+    <Compile Include="../../src/InlineTranslator/BubbleLayout.cs" Link="BubbleLayout.cs" />
     <Compile Include="../../src/InlineTranslator/Engines.cs" Link="Engines.cs" />
     <Compile Include="../../src/InlineTranslator/ErrorLog.cs" Link="ErrorLog.cs" />
     <Compile Include="../../src/InlineTranslator/Hotkey.cs" Link="Hotkey.cs" />

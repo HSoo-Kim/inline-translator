@@ -21,6 +21,7 @@ public sealed record AppSettings
     public const int PresetCount = 3;
     public static readonly string[] UiLanguages = ["ko", "en", "zh-CN", "ja"];
     public static readonly string[] Tones = ["natural", "casual", "formal"];
+    public static readonly string[] BubbleThemes = ["light", "dark"];
     public const string DefaultClaudeModel = "claude-haiku-5-5";
     public const string DefaultCodexModel = "gpt-5.6-luna";
 
@@ -40,6 +41,7 @@ public sealed record AppSettings
     public IReadOnlyList<HotkeyPreset> Presets { get; init; } = DefaultPresets;
     public string Tone { get; init; } = "natural";
     public IReadOnlyList<string> WholeInputApps { get; init; } = DefaultWholeInputApps;
+    public string BubbleTheme { get; init; } = "light";
     public bool CheckForUpdates { get; init; } = true;
     public bool AutoInstallUpdates { get; init; } = true;
 
@@ -86,6 +88,7 @@ public sealed record AppSettings
             Fallback = fallback,
             Presets = presets,
             Tone = Tones.Contains(Tone) ? Tone : "natural",
+            BubbleTheme = BubbleThemes.Contains(BubbleTheme) ? BubbleTheme : "light",
             WholeInputApps = apps,
         };
     }
