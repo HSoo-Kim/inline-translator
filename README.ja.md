@@ -1,0 +1,86 @@
+<p align="center"><img src="src/InlineTranslator/Assets/app.png" width="96" alt="Inline Translator アイコン"></p>
+
+<h1 align="center">Inline Translator</h1>
+
+<p align="center"><a href="README.md">한국어</a> · <a href="README.en.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <b>日本語</b></p>
+
+一文を翻訳するために ChatGPT や Claude を開いて、貼り付けて、コピーして戻ってくる。面倒ですよね？
+
+これからは**入力している場所でショートカットを一回**押すだけ。数秒でその場の文章が訳文に置き換わります。
+
+<p align="center"><img src="docs/images/demo-en.gif" width="800" alt="チャット入力欄に韓国語を入力し Ctrl+Alt+T を押すと英語になるデモ"></p>
+<p align="center"><sub>実際の Claude Haiku の翻訳結果で再現したデモです。</sub></p>
+
+## 使い方
+
+1. いつも通り入力します。Telegram、Slack、メール、文書、どこでも。
+2. 翻訳したい部分を選択して **`Ctrl+Alt+T`** を押します。チャットアプリでは選択しなくても入力欄全体を翻訳します。
+3. 2～4 秒でその場が訳文に変わります。気に入らなければ `Ctrl+Z`。
+
+## 機能
+
+- **API キー不要** —— すでに使っている Claude Code または Codex のサブスクリプションをそのまま使います。
+- **モデルを選べる** —— Haiku、Sonnet、Opus、GPT 系、モデル名の直接入力も可。
+- **予備エンジン** —— メインが失敗したら自動で切り替えます。
+- **19 言語** —— 英語、韓国語、日本語、中国語（簡体・繁体）、スペイン語、フランス語、ドイツ語、ポルトガル語、イタリア語、ロシア語、ベトナム語、タイ語、インドネシア語、アラビア語、ヒンディー語、トルコ語、オランダ語、ポーランド語。原文の言語は自動判定します。
+- **ショートカット 3 つ** —— たとえば `Ctrl+Alt+T` は英語、`Ctrl+Alt+J` は日本語。
+- **トーン** —— 原文に合わせる、カジュアル、丁寧。
+- **安全** —— 翻訳中に別のウィンドウへ移ったら貼り付けず、クリップボードにだけ入れます。元のクリップボードは元に戻します。
+- **記録しない** —— 訳文はファイルにも Windows のクリップボード履歴（`Win+V`）にも残りません。
+- **ワンクリック更新** —— 新しいバージョンが出ると、通知領域のメニューと設定に「更新」ボタンが表示され、押すとダウンロード・置き換え・再起動します。
+- **表示言語** —— 한국어、English、简体中文、日本語。
+
+## はじめに
+
+1. **翻訳エンジンを用意** —— 次のどちらかをインストールしてサインインしておきます。
+   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)：インストール後、ターミナルで `claude` を実行してサインイン
+   - [Codex CLI](https://github.com/openai/codex)：インストール後 `codex login`
+2. **[最新版をダウンロード](https://github.com/HSoo-Kim/inline-translator/releases/latest)** して `inline-translator-win-x64.zip` を展開し、`InlineTranslator.exe` を実行。
+3. 初回は設定画面が開きます。エンジン横の「テスト」で動作を確認して「保存」。
+
+その後は通知領域で静かに動きます。アイコンをクリックで設定、右クリックで一時停止・終了。
+
+Windows 11 x64 用です。実行ファイルに .NET が含まれているので追加のインストールは不要です。コード署名がないため、初回起動時に Windows が警告を出すことがあります。
+
+## 設定
+
+<p align="center"><img src="docs/images/settings-ja.png" width="520" alt="Inline Translator の設定画面"></p>
+
+| 項目 | 内容 |
+|---|---|
+| 翻訳エンジン | メインと失敗時に使うエンジン。モデルは一覧から選ぶか直接入力します。 |
+| ショートカットと翻訳先の言語 | ショートカット欄をクリックして、使いたいキーの組み合わせを押します。 |
+| 入力欄全体を翻訳するアプリ | これらのアプリでは選択しなくても入力欄全体を翻訳します。既定：Telegram、KakaoTalk、Slack、Discord、WhatsApp、LINE、Teams、Signal |
+| 全般 | 表示言語、Windows 起動時に実行、更新の確認 |
+
+## データとプライバシー
+
+- テキストは**選んだエンジン（Claude Code または Codex）にだけ**送られます。アプリ自体が他へ送ることはありません。
+- エンジンは会話を保存しない設定（`--no-session-persistence`、`--ephemeral`）で、ツールを無効にし、使用後すぐ削除する空の一時フォルダーで実行されます。
+- エラーログ（`%LOCALAPPDATA%\InlineTranslator\error.log`）にはエラー内容だけが残り、翻訳した文章は残りません。
+- 更新確認は GitHub（`api.github.com`）から最新リリース情報だけを読みます。GitHub が公開する SHA-256 と一致した場合だけインストールします。設定でオフにできます。
+- 設定ファイル：`%LOCALAPPDATA%\InlineTranslator\settings.json`
+- 翻訳はご利用中のサブスクリプションの使用量に含まれます。
+
+## 注意点
+
+- Claude Code 2.1.300、Codex CLI 0.153.2 で確認しています。古すぎるバージョンでは一部のオプションがなく失敗することがあります。
+- コードエディターなど一部のアプリは、何も選択せずに `Ctrl+C` を押すと行全体をコピーします。先に選択してください。
+- 管理者として実行中のウィンドウには、Windows の仕様上貼り付けできません。
+- ショートカットが他のプログラムと重なっている場合はお知らせします。設定で別の組み合わせを選んでください。
+
+## ソースからビルド
+
+Windows 11 x64 と .NET 10 SDK が必要です。
+
+```powershell
+.\build.ps1                 # ビルド + 単体テスト
+.\build.ps1 -Screenshots    # 設定画面のスクリーンショットを非公開デスクトップで再生成
+.\build.ps1 -Publish        # ランタイム同梱の実行ファイルと ZIP を生成
+```
+
+デモ GIF は `docs/demo/demo.html` をフレームごとに描画して作っています。NuGet パッケージへの依存はなく、.NET Windows Forms と Win32 API だけを使います。
+
+## ライセンス
+
+[MIT](LICENSE)。個人・企業を問わず無料で使用・改変・配布できます。再配布の際は著作権表示とライセンス表示を含めてください。
