@@ -1,6 +1,8 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace InlineTranslator;
 
@@ -57,6 +59,8 @@ public static class ProcessRunner
 
 public sealed class EngineException(string message) : Exception(message);
 
+public enum SignIn { NotInstalled, SignedIn, SignedOut, Unknown }
+
 public sealed record ModelOption(string Id, string Label)
 {
     public override string ToString() => Label;
@@ -74,6 +78,74 @@ public static class EngineCli
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(60);
 
     public static string ProductName(Provider provider) => provider == Provider.Codex ? "Codex" : "Claude Code";
+
+    public static string InstallPage(Provider provider) => provider == Provider.Codex
+        ? "https://github.com/openai/codex"
+        : "https://docs.anthropic.com/en/docs/claude-code";
+
+    private static readonly Regex SignInProblem = new(
+        @"authenticat|not logged in|log ?in|sign ?in|oauth|\b401\b|unauthori[sz]ed|token (has )?expired|session expired",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    public static bool IsSignInError(Exception error) =>
+        error is EngineException && !error.Message.Contains("was not found", StringComparison.Ordinal) && SignInProblem.IsMatch(error.Message);
+
+    public static async Task<SignIn> CheckSignInAsync(Provider provider, CancellationToken token)
+    {
+        string? executable = Resolve(provider);
+        if (executable is null) return SignIn.NotInstalled;
+        try
+        {
+            var result = await ProcessRunner.RunAsync(executable,
+                provider == Provider.Claude ? ["auth", "status"] : ["login", "status"], "", Path.GetTempPath(),
+                TimeSpan.FromSeconds(20), token);
+            return provider == Provider.Claude ? ParseClaudeSignIn(result) : ParseCodexSignIn(result);
+        }
+        catch (Exception error) when (error is TimeoutException or Win32Exception or IOException or InvalidOperationException)
+        {
+            ErrorLog.Write($"Could not check {ProductName(provider)} sign-in", error);
+            return SignIn.Unknown;
+        }
+    }
+
+    public static SignIn ParseClaudeSignIn(ProcessResult result)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(result.Output);
+            return document.RootElement.TryGetProperty("loggedIn", out var loggedIn) && loggedIn.ValueKind == JsonValueKind.True
+                ? SignIn.SignedIn
+                : SignIn.SignedOut;
+        }
+        catch (JsonException)
+        {
+            return result.ExitCode == 0 ? SignIn.Unknown : SignIn.SignedOut;
+        }
+    }
+
+    public static SignIn ParseCodexSignIn(ProcessResult result)
+    {
+        string text = result.Output + "\n" + result.Error;
+        if (text.Contains("Not logged in", StringComparison.OrdinalIgnoreCase)) return SignIn.SignedOut;
+        if (result.ExitCode == 0 && text.Contains("Logged in", StringComparison.OrdinalIgnoreCase)) return SignIn.SignedIn;
+        return result.ExitCode == 0 ? SignIn.Unknown : SignIn.SignedOut;
+    }
+
+    public static string SignInCommandLine(string executable, Provider provider) =>
+        $"/d /c \"\"{executable}\" {(provider == Provider.Claude ? "auth login" : "login")} & echo. & pause\"";
+
+    // Opens a visible console because both CLIs sign in interactively through the browser.
+    public static Process StartSignIn(Provider provider)
+    {
+        string executable = Resolve(provider)
+            ?? throw new EngineException($"{ProductName(provider)} CLI was not found. Install it and sign in once.");
+        var info = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"), SignInCommandLine(executable, provider))
+        {
+            UseShellExecute = false,
+            CreateNoWindow = false,
+        };
+        return Process.Start(info) ?? throw new InvalidOperationException("Could not open the sign-in window.");
+    }
 
     public static string? Resolve(Provider provider)
     {

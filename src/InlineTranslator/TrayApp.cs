@@ -26,6 +26,8 @@ internal sealed class TrayApp : ApplicationContext
     private SettingsForm? settingsForm;
     private ReleaseInfo? update;
     private bool busy, installing;
+    private Action? balloonAction;
+    private readonly HashSet<Provider> signInReminded = [];
 
     public TrayApp(string settingsPath, AppSettings settings, bool firstRun, uint activationMessage)
     {
@@ -36,7 +38,8 @@ internal sealed class TrayApp : ApplicationContext
         hotkeys.HotkeyPressed += id => _ = TranslateActiveAsync(id - 1);
         hotkeys.ActivationRequested += ShowSettings;
 
-        var menu = new ContextMenuStrip();
+        var menu = new ContextMenuStrip { Renderer = new RoundMenuRenderer(), Font = Ui.Regular() };
+        menu.Opened += (_, _) => Ui.RoundWindow(menu);
         menu.Items.AddRange([titleItem, new ToolStripSeparator(), updateItem, settingsItem, languageItem, pauseItem, new ToolStripSeparator(), exitItem]);
         foreach (var (code, name) in SettingsForm.DisplayLanguages)
         {
@@ -50,6 +53,12 @@ internal sealed class TrayApp : ApplicationContext
         exitItem.Click += (_, _) => ExitThread();
         tray = new NotifyIcon { Icon = icon, ContextMenuStrip = menu, Visible = true };
         tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowSettings(); };
+        tray.BalloonTipClicked += (_, _) =>
+        {
+            var action = balloonAction;
+            balloonAction = null;
+            action?.Invoke();
+        };
 
         RefreshTexts();
         ApplyHotkeys(notify: true);
@@ -156,11 +165,22 @@ internal sealed class TrayApp : ApplicationContext
             snapshot = ClipboardSnapshot.Take();
             string? copied = await CopyAsync(selectAll: false, SelectionProbe);
             restoreClipboard = copied is not null;
-            var mode = Capture.Decide(!string.IsNullOrWhiteSpace(copied), ForegroundWindow.ProcessName(window), settings.WholeInputApps);
+            string? process = ForegroundWindow.ProcessName(window);
+            var mode = Capture.Decide(!string.IsNullOrWhiteSpace(copied), process, settings.WholeInputApps);
             if (mode == CaptureMode.WholeInput)
             {
                 copied = await CopyAsync(selectAll: true, CopyWait);
                 restoreClipboard |= copied is not null;
+                if (string.IsNullOrWhiteSpace(copied))
+                {
+                    Notify(text.T("Could not read the input box in {0}. Drag-select the text, then press the hotkey.", process ?? ""), ToolTipIcon.Info);
+                    return;
+                }
+                if (Capture.LooksLikeWholeDocument(copied))
+                {
+                    Notify(text.T("That looks like a whole document, not a chat message, so nothing was translated. Drag-select the part to translate, or remove {0} from the whole-input apps in Settings.", process ?? ""), ToolTipIcon.Warning);
+                    return;
+                }
             }
             if (mode == CaptureMode.NeedSelection || string.IsNullOrWhiteSpace(copied))
             {
@@ -172,7 +192,12 @@ internal sealed class TrayApp : ApplicationContext
             var result = await translator.TranslateAsync(settings, target, copied, CancellationToken.None);
             indicator.Hide();
             if (result.PrimaryError is { } primaryError)
+            {
                 ErrorLog.Write($"{settings.Primary.DisplayName} failed, used {result.Engine.DisplayName}", primaryError);
+                if (EngineCli.IsSignInError(primaryError) && signInReminded.Add(settings.Primary.Provider))
+                    NotifySignIn(settings.Primary.Provider, text.T("{0} needs you to sign in again, so {1} translated this. Click here to sign in to {0}.",
+                        EngineCli.ProductName(settings.Primary.Provider), EngineCli.ProductName(result.Engine.Provider)));
+            }
 
             restoreClipboard = true;
             PrivateClipboard.SetText(result.Text);
@@ -190,7 +215,13 @@ internal sealed class TrayApp : ApplicationContext
         {
             ErrorLog.Write(settings.Primary.DisplayName + " failed", failure.Primary);
             if (failure.Fallback is { } fallback) ErrorLog.Write(settings.Fallback.DisplayName + " failed", fallback);
-            Notify(text.T("Translation failed: {0}", failure.Message), ToolTipIcon.Error);
+            var provider = EngineCli.IsSignInError(failure.Primary) ? settings.Primary.Provider
+                : failure.Fallback is { } other && EngineCli.IsSignInError(other) ? settings.Fallback.Provider
+                : Provider.None;
+            if (provider != Provider.None)
+                NotifySignIn(provider, text.T("{0} needs you to sign in. Click here to sign in.", EngineCli.ProductName(provider)));
+            else
+                Notify(text.T("Translation failed: {0}", failure.Message), ToolTipIcon.Error);
         }
         catch (Exception error)
         {
@@ -280,7 +311,29 @@ internal sealed class TrayApp : ApplicationContext
         }
     }
 
-    private void Notify(string message, ToolTipIcon kind) => tray.ShowBalloonTip(5000, "Inline Translator", message, kind);
+    private void Notify(string message, ToolTipIcon kind)
+    {
+        balloonAction = null;
+        tray.ShowBalloonTip(5000, "Inline Translator", message, kind);
+    }
+
+    private void NotifySignIn(Provider provider, string message)
+    {
+        tray.ShowBalloonTip(8000, "Inline Translator", message, ToolTipIcon.Warning);
+        balloonAction = () =>
+        {
+            try
+            {
+                EngineCli.StartSignIn(provider).Dispose();
+                signInReminded.Remove(provider);
+            }
+            catch (Exception error) when (error is EngineException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                ErrorLog.Write("Could not start sign-in", error);
+                ShowSettings();
+            }
+        };
+    }
 
     protected override void ExitThreadCore()
     {

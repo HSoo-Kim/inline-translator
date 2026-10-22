@@ -1,13 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Version>0.1.2</Version>
+    <Version>0.1.3</Version>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/InlineTranslator/AppCatalog.cs" Link="AppCatalog.cs" />
     <Compile Include="../../src/InlineTranslator/Engines.cs" Link="Engines.cs" />
     <Compile Include="../../src/InlineTranslator/ErrorLog.cs" Link="ErrorLog.cs" />
     <Compile Include="../../src/InlineTranslator/Hotkey.cs" Link="Hotkey.cs" />

@@ -4,25 +4,34 @@ namespace InlineTranslator;
 
 internal sealed class SettingsForm : Form
 {
-    private static readonly Color Muted = Color.FromArgb(96, 103, 112);
-    private static readonly Color Accent = Color.FromArgb(37, 99, 235);
+    private const int ContentWidth = 600;
+    private static readonly Provider[] Providers = [Provider.Claude, Provider.Codex];
 
     private readonly UiText text;
     private readonly AppSettings original;
     private readonly Func<AppSettings, IReadOnlyList<string>> save;
     private readonly Func<Task> installUpdate;
     private readonly EngineRow primary, fallback;
-    private readonly List<(CheckBox Enabled, HotkeyBox Hotkey, ComboBox Language)> presets = [];
-    private readonly ComboBox tone = Dropdown(180);
-    private readonly TextBox wholeInputApps = new() { Width = 552, Margin = new Padding(0, 6, 0, 0) };
-    private readonly ComboBox uiLanguage = Dropdown(180);
-    private readonly CheckBox startWithWindows = new() { AutoSize = true };
-    private readonly CheckBox checkForUpdates = new() { AutoSize = true };
-    private readonly CheckBox autoInstall = new() { AutoSize = true, Margin = new Padding(20, 2, 0, 2) };
-    private readonly Label engineStatus = Note("");
-    private readonly Label testResult = Note("");
+    private readonly List<(ToggleSwitch Enabled, HotkeyBox Hotkey, PillDropdown Language)> presets = [];
+    private readonly PillDropdown tone = new(190);
+    private readonly PillDropdown uiLanguage = new(160);
+    private readonly FlowLayoutPanel appChips = new()
+    {
+        AutoSize = true,
+        WrapContents = true,
+        MaximumSize = new Size(ContentWidth - 40, 0),
+        Margin = new Padding(0, 6, 0, 0),
+        BackColor = Color.Transparent,
+    };
+    private readonly List<string> wholeInputApps = [];
+    private readonly ToggleSwitch startWithWindows;
+    private readonly ToggleSwitch checkForUpdates;
+    private readonly ToggleSwitch autoInstall;
+    private readonly Dictionary<Provider, SignIn?> signIn = new() { [Provider.Claude] = null, [Provider.Codex] = null };
+    private readonly Dictionary<Provider, (StatusPill Pill, PillButton Action)> accounts = [];
+    private readonly Label testResult;
+    private readonly PillButton updateButton = new("", PillKind.Soft) { Visible = false, Margin = new Padding(0, 0, 8, 0) };
     private readonly ToolTip tips = new();
-    private readonly Button updateButton = new() { AutoSize = true, Visible = false, FlatStyle = FlatStyle.System };
 
     public SettingsForm(AppSettings settings, UiText text, Icon icon, ReleaseInfo? update,
         Func<AppSettings, IReadOnlyList<string>> save, Func<Task> installUpdate, Action<string> changeLanguage)
@@ -33,116 +42,138 @@ internal sealed class SettingsForm : Form
         this.installUpdate = installUpdate;
         Text = "Inline Translator — " + text.T("Settings");
         Icon = icon;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
+        Font = Ui.Regular();
+        FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = Color.White;
-        AutoSize = true;
-        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        BackColor = Ui.Canvas;
         AutoScaleMode = AutoScaleMode.Dpi;
         Disposed += (_, _) => tips.Dispose();
 
-        primary = new EngineRow(text.T("Primary"), allowNone: false, text);
-        fallback = new EngineRow(text.T("If it fails"), allowNone: true, text);
+        startWithWindows = new ToggleSwitch(text.T("Start with Windows")) { Enabled = StartWithWindows.Executable is not null };
+        checkForUpdates = new ToggleSwitch(text.T("Check for new versions"));
+        autoInstall = new ToggleSwitch(text.T("Install automatically when Update is clicked")) { Margin = new Padding(24, 4, 0, 4) };
+        checkForUpdates.CheckedChanged += (_, _) => autoInstall.Enabled = checkForUpdates.Checked;
+        testResult = Ui.Text("", Ui.Muted, maxWidth: ContentWidth - 40);
+        testResult.Visible = false;
+
+        primary = new EngineRow(text.T("Primary"), allowNone: false, text, this);
+        fallback = new EngineRow(text.T("If it fails"), allowNone: true, text, this);
         primary.Test.Click += async (_, _) => await TestAsync(primary);
         fallback.Test.Click += async (_, _) => await TestAsync(fallback);
+        primary.Changed += () => primary.ShowStatus(signIn);
+        fallback.Changed += () => fallback.ShowStatus(signIn);
 
-        var root = new TableLayoutPanel
+        var scroller = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Ui.Canvas };
+        var page = new TableLayoutPanel
         {
             ColumnCount = 1,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Padding = new Padding(24, 18, 24, 16),
+            Padding = new Padding(20, 18, 20, 8),
+            BackColor = Ui.Canvas,
         };
-        Controls.Add(root);
+        scroller.Controls.Add(page);
 
-        var languageRow = Grid(2);
-        languageRow.Margin = Padding.Empty;
-        languageRow.Controls.Add(new Label { Text = LanguageLabel(text), AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 12, 6) });
-        uiLanguage.Items.AddRange([.. DisplayLanguages.Select(language => language.Code == "" ? text.T("System default") : language.Name)]);
-        languageRow.Controls.Add(uiLanguage);
-        root.Controls.Add(languageRow);
+        page.Controls.Add(Header(icon, changeLanguage));
 
-        root.Controls.Add(Section(text.T("Translation engine"),
-            text.T("Uses the Claude Code or Codex you are already signed in to on this PC. No API key needed.")));
-        var engines = Grid(4);
+        var engineCard = Card(text.T("Translation engine"),
+            text.T("Uses the Claude Code or Codex you are already signed in to on this PC. No API key needed."));
+        var engines = Grid(5);
         primary.AddTo(engines);
         fallback.AddTo(engines);
-        root.Controls.Add(engines);
-        root.Controls.Add(engineStatus);
-        root.Controls.Add(testResult);
+        engineCard.Controls.Add(engines);
+        var accountRow = new FlowRow { Margin = new Padding(0, 8, 0, 0) };
+        foreach (var provider in Providers)
+        {
+            var pill = new StatusPill();
+            var action = new PillButton("", PillKind.Soft) { Visible = false, MinimumSize = new Size(0, 26), Padding = new Padding(10, 1, 10, 1), Margin = new Padding(0, 3, 14, 3), Font = Ui.Regular(9f) };
+            action.Click += (_, _) => AccountAction(provider);
+            accountRow.Controls.AddRange([pill, action]);
+            accounts[provider] = (pill, action);
+        }
+        engineCard.Controls.Add(accountRow);
+        engineCard.Controls.Add(testResult);
+        page.Controls.Add(engineCard.Panel);
 
-        root.Controls.Add(Section(text.T("Hotkeys and target languages"),
-            text.T("Select text and press a hotkey: it is replaced with the translation in place.")));
+        var hotkeyCard = Card(text.T("Hotkeys and target languages"),
+            text.T("Select text and press a hotkey: it is replaced with the translation in place."));
         var hotkeyGrid = Grid(4);
         for (int i = 0; i < AppSettings.PresetCount; i++)
         {
-            var enabled = new CheckBox { AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 4, 6) };
-            var hotkey = new HotkeyBox(text) { Width = 170, Margin = new Padding(0, 4, 8, 4) };
-            var language = Dropdown(240);
-            language.Items.AddRange([.. Languages.All]);
-            hotkeyGrid.Controls.Add(enabled);
-            hotkeyGrid.Controls.Add(hotkey);
-            hotkeyGrid.Controls.Add(new Label { Text = "→", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 8, 6) });
-            hotkeyGrid.Controls.Add(language);
+            var enabled = new ToggleSwitch("") { Anchor = AnchorStyles.Left, Margin = new Padding(0, 4, 10, 4) };
+            var hotkey = new HotkeyBox(text);
+            var field = new RoundedPanel(Color.White, Ui.Line, 10)
+            {
+                Size = new Size(170, 34),
+                Padding = new Padding(10, 8, 10, 4),
+                Margin = new Padding(0, 3, 10, 3),
+                Anchor = AnchorStyles.Left,
+            };
+            field.Controls.Add(hotkey);
+            var language = new PillDropdown(250);
+            language.SetOptions(Languages.All.Select(item => ((object)item.Code, item.ToString())));
+            enabled.CheckedChanged += (_, _) =>
+            {
+                language.Enabled = enabled.Checked;
+                hotkey.ForeColor = enabled.Checked ? Ui.Ink : Ui.Gray;
+            };
+            hotkeyGrid.Controls.AddRange([enabled, field, Ui.Text("→", Ui.Muted), language]);
             presets.Add((enabled, hotkey, language));
         }
-        root.Controls.Add(hotkeyGrid);
-        var toneRow = Grid(2);
-        toneRow.Controls.Add(new Label { Text = text.T("Tone"), AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 12, 6) });
-        tone.Items.AddRange([text.T("Match the original"), text.T("Casual"), text.T("Polite")]);
-        toneRow.Controls.Add(tone);
-        root.Controls.Add(toneRow);
+        hotkeyCard.Controls.Add(hotkeyGrid);
+        var toneRow = new FlowRow { Margin = new Padding(0, 8, 0, 0) };
+        tone.SetOptions(new (object, string)[] { ("natural", text.T("Match the original")), ("casual", text.T("Casual")), ("formal", text.T("Polite")) });
+        toneRow.Controls.AddRange([Ui.Text(text.T("Tone"), Ui.Muted), tone]);
+        hotkeyCard.Controls.Add(toneRow);
+        page.Controls.Add(hotkeyCard.Panel);
 
-        root.Controls.Add(Section(text.T("Apps that translate the whole input box"),
-            text.T("In these apps, pressing the hotkey with nothing selected translates everything in the input box. Separate with commas.")));
-        root.Controls.Add(wholeInputApps);
+        var appsCard = Card(text.T("Apps that translate the whole input box"),
+            text.T("In these apps, pressing the hotkey with nothing selected translates the whole message. Drag-select first to translate only part of it."));
+        appsCard.Controls.Add(appChips);
+        page.Controls.Add(appsCard.Panel);
 
-        root.Controls.Add(Section(text.T("General"), null));
-        startWithWindows.Text = text.T("Start with Windows");
-        startWithWindows.Enabled = StartWithWindows.Executable is not null;
-        checkForUpdates.Text = text.T("Check for new versions");
-        autoInstall.Text = text.T("Install automatically when Update is clicked");
-        checkForUpdates.CheckedChanged += (_, _) => autoInstall.Enabled = checkForUpdates.Checked;
-        root.Controls.Add(startWithWindows);
-        root.Controls.Add(checkForUpdates);
-        root.Controls.Add(autoInstall);
+        var generalCard = Card(text.T("General"), null);
+        generalCard.Controls.Add(startWithWindows);
+        generalCard.Controls.Add(checkForUpdates);
+        generalCard.Controls.Add(autoInstall);
+        page.Controls.Add(generalCard.Panel);
 
-        var bottom = new TableLayoutPanel
+        var footer = new Panel { Dock = DockStyle.Bottom, Height = 64, BackColor = Color.White };
+        footer.Paint += (_, e) =>
         {
-            ColumnCount = 4,
-            AutoSize = true,
-            Anchor = AnchorStyles.Left | AnchorStyles.Right,
-            Margin = new Padding(0, 20, 0, 0),
+            using var pen = new Pen(Ui.Line);
+            e.Graphics.DrawLine(pen, 0, 0, footer.Width, 0);
         };
-        bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        var version = new LinkLabel { Text = "v" + UpdateChecker.Current.ToString(3) + " · GitHub", AutoSize = true, Anchor = AnchorStyles.Left, LinkColor = Muted };
-        version.LinkClicked += (_, _) => Process.Start(new ProcessStartInfo("https://github.com/HSoo-Kim/inline-translator") { UseShellExecute = true })?.Dispose();
-        var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = Padding.Empty };
-        var saveButton = new Button { Text = text.T("Save"), AutoSize = true, MinimumSize = new Size(88, 30), FlatStyle = FlatStyle.System };
-        var cancelButton = new Button { Text = text.T("Cancel"), AutoSize = true, MinimumSize = new Size(88, 30), FlatStyle = FlatStyle.System, DialogResult = DialogResult.Cancel };
+        var version = new LinkLabel
+        {
+            Text = "v" + UpdateChecker.Current.ToString(3) + " · GitHub",
+            AutoSize = true,
+            LinkColor = Ui.Muted,
+            ActiveLinkColor = Ui.Accent,
+            LinkBehavior = LinkBehavior.HoverUnderline,
+        };
+        version.LinkClicked += (_, _) => Open("https://github.com/HSoo-Kim/inline-translator");
+        var saveButton = new PillButton(text.T("Save"), PillKind.Primary) { MinimumSize = new Size(96, 36) };
+        var cancelButton = new PillButton(text.T("Cancel"), PillKind.Secondary) { MinimumSize = new Size(88, 36), DialogResult = DialogResult.Cancel };
         saveButton.Click += (_, _) => Save();
         cancelButton.Click += (_, _) => Close();
         updateButton.Click += async (_, _) => await installUpdate();
-        buttons.Controls.AddRange([saveButton, cancelButton]);
-        bottom.Controls.Add(version, 0, 0);
-        bottom.Controls.Add(updateButton, 2, 0);
-        bottom.Controls.Add(buttons, 3, 0);
-        root.Controls.Add(bottom);
+        footer.Controls.AddRange([version, updateButton, cancelButton, saveButton]);
+        footer.Layout += (_, _) => Ui.LayoutFooter(footer, version, [updateButton, cancelButton, saveButton]);
+        Controls.Add(scroller);
+        Controls.Add(footer);
         AcceptButton = saveButton;
         CancelButton = cancelButton;
 
         LoadSettings(settings);
         SetUpdate(update);
-        uiLanguage.SelectionChangeCommitted += (_, _) =>
-        {
-            string code = DisplayLanguages[Math.Max(0, uiLanguage.SelectedIndex)].Code;
-            BeginInvoke(() => changeLanguage(code));
-        };
+        Shown += async (_, _) => await RefreshSignInAsync();
+
+        var preferred = page.GetPreferredSize(Size.Empty);
+        int maxHeight = Screen.FromPoint(Cursor.Position).WorkingArea.Height - 60;
+        ClientSize = new Size(preferred.Width + SystemInformation.VerticalScrollBarWidth, Math.Min(preferred.Height + footer.Height, maxHeight));
     }
 
     public static readonly IReadOnlyList<(string Code, string Name)> DisplayLanguages =
@@ -154,8 +185,85 @@ internal sealed class SettingsForm : Form
     public void SetUpdate(ReleaseInfo? release)
     {
         updateButton.Visible = release is not null;
-        if (release is not null) updateButton.Text = text.T("Update to {0}", release.Tag);
+        if (release is not null) updateButton.Text = "↑ " + text.T("Update to {0}", release.Tag);
     }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        Ui.RoundWindow(this);
+    }
+
+    private Control Header(Icon icon, Action<string> changeLanguage)
+    {
+        var header = new TableLayoutPanel { ColumnCount = 3, AutoSize = true, Margin = new Padding(0, 0, 0, 14), BackColor = Ui.Canvas, MinimumSize = new Size(ContentWidth, 0) };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var logo = new PictureBox { Image = new Icon(icon, 40, 40).ToBitmap(), Size = new Size(40, 40), SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(0, 0, 12, 0), Anchor = AnchorStyles.Left };
+        var titles = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = Padding.Empty, BackColor = Ui.Canvas };
+        var title = Ui.Text("Inline Translator", Ui.Ink, Ui.Bold(14f));
+        title.Margin = Padding.Empty;
+        var subtitle = Ui.Text(text.T("Select text, press the hotkey, done."), Ui.Muted);
+        subtitle.Margin = Padding.Empty;
+        titles.Controls.AddRange([title, subtitle]);
+        var languageBox = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = Padding.Empty, BackColor = Ui.Canvas };
+        var languageLabel = Ui.Text("🌐 " + LanguageLabel(text), Ui.Muted, Ui.Regular(8.5f));
+        languageLabel.Margin = new Padding(2, 0, 0, 2);
+        uiLanguage.SetOptions(DisplayLanguages.Select(language => ((object)language.Code, language.Code == "" ? text.T("System default") : language.Name)));
+        uiLanguage.Margin = Padding.Empty;
+        uiLanguage.SelectionChanged += () =>
+        {
+            string code = (string)uiLanguage.SelectedValue!;
+            BeginInvoke(() => changeLanguage(code));
+        };
+        languageBox.Controls.AddRange([languageLabel, uiLanguage]);
+        header.Controls.AddRange([logo, titles, languageBox]);
+        return header;
+    }
+
+    private sealed record CardParts(RoundedPanel Panel, Control.ControlCollection Controls);
+
+    private static CardParts Card(string title, string? description)
+    {
+        var card = new RoundedPanel(Ui.Card, Ui.Line, 14)
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            MinimumSize = new Size(ContentWidth, 0),
+            Padding = new Padding(20, 16, 20, 18),
+            Margin = new Padding(0, 0, 0, 14),
+        };
+        var body = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoSize = true,
+            Location = new Point(card.Padding.Left, card.Padding.Top),
+            BackColor = Ui.Card,
+            Margin = Padding.Empty,
+        };
+        card.Controls.Add(body);
+        var heading = Ui.Text(title, Ui.Ink, Ui.Bold(11f));
+        heading.Margin = Padding.Empty;
+        body.Controls.Add(heading);
+        if (description is not null)
+        {
+            var note = Ui.Text(description, Ui.Muted, Ui.Regular(9f), ContentWidth - 40);
+            note.Margin = new Padding(0, 3, 0, 6);
+            body.Controls.Add(note);
+        }
+        return new CardParts(card, body.Controls);
+    }
+
+    private static TableLayoutPanel Grid(int columns)
+    {
+        var grid = new TableLayoutPanel { ColumnCount = columns, AutoSize = true, Margin = new Padding(0, 4, 0, 0), BackColor = Ui.Card };
+        for (int i = 0; i < columns; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        return grid;
+    }
+
+    private static void Open(string url) => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
 
     private void LoadSettings(AppSettings settings)
     {
@@ -166,20 +274,50 @@ internal sealed class SettingsForm : Form
             var preset = settings.Presets[i];
             presets[i].Enabled.Checked = preset.Enabled;
             presets[i].Hotkey.SetHotkey(Hotkey.TryParse(preset.Hotkey, out var hotkey) ? hotkey : null);
-            presets[i].Language.SelectedItem = Languages.Find(preset.TargetLanguage) ?? Languages.All[0];
+            presets[i].Language.Select(Languages.Find(preset.TargetLanguage)?.Code ?? "en");
+            presets[i].Language.Enabled = preset.Enabled;
+            presets[i].Hotkey.ForeColor = preset.Enabled ? Ui.Ink : Ui.Gray;
         }
-        tone.SelectedIndex = Math.Max(0, Array.IndexOf(AppSettings.Tones, settings.Tone));
-        wholeInputApps.Text = string.Join(", ", settings.WholeInputApps);
-        uiLanguage.SelectedIndex = Math.Max(0, DisplayLanguages.ToList().FindIndex(language => language.Code == settings.UiLanguage));
+        tone.Select(settings.Tone);
+        uiLanguage.Select(settings.UiLanguage);
+        wholeInputApps.AddRange(settings.WholeInputApps);
+        ShowApps();
         startWithWindows.Checked = StartWithWindows.IsEnabled;
         checkForUpdates.Checked = settings.CheckForUpdates;
         autoInstall.Checked = settings.AutoInstallUpdates;
         autoInstall.Enabled = settings.CheckForUpdates;
-        var found = new[] { Provider.Claude, Provider.Codex }.Select(provider => (provider, path: EngineCli.Resolve(provider))).ToArray();
-        engineStatus.Text = string.Join("   ·   ", found.Select(item =>
-            EngineCli.ProductName(item.provider) + (item.path is null ? " ✗ " + text.T("not found") : " ✓")));
-        tips.SetToolTip(engineStatus, string.Join("\n", found.Select(item => item.path ?? EngineCli.ProductName(item.provider) + ": " + text.T("not found"))));
-        testResult.Visible = false;
+        foreach (var (provider, row) in accounts)
+            tips.SetToolTip(row.Pill, EngineCli.Resolve(provider) ?? EngineCli.ProductName(provider) + ": " + text.T("not found"));
+        ShowAccounts();
+    }
+
+    private void ShowApps()
+    {
+        appChips.SuspendLayout();
+        foreach (Control control in appChips.Controls.Cast<Control>().ToArray()) control.Dispose();
+        foreach (string app in wholeInputApps)
+        {
+            var chip = new Chip(app);
+            chip.Removed += () =>
+            {
+                wholeInputApps.Remove(app);
+                ShowApps();
+            };
+            appChips.Controls.Add(chip);
+        }
+        var add = new PillButton(text.T("+ Add apps"), PillKind.Soft) { MinimumSize = new Size(0, 28), Padding = new Padding(12, 1, 12, 1), Margin = new Padding(0, 3, 6, 3), Font = Ui.Regular(9f) };
+        add.Click += (_, _) => PickApps();
+        appChips.Controls.Add(add);
+        appChips.ResumeLayout();
+    }
+
+    private void PickApps()
+    {
+        using var picker = new AppPicker(text, wholeInputApps);
+        if (picker.ShowDialog(this) != DialogResult.OK) return;
+        wholeInputApps.Clear();
+        wholeInputApps.AddRange(picker.Selected);
+        ShowApps();
     }
 
     private AppSettings Collect() => original with
@@ -187,10 +325,10 @@ internal sealed class SettingsForm : Form
         Primary = primary.Get(),
         Fallback = fallback.Get(),
         Presets = presets.Select(row => new HotkeyPreset(row.Enabled.Checked, row.Hotkey.GetHotkey()?.ToString() ?? "",
-            (row.Language.SelectedItem as TargetLanguage)?.Code ?? "en")).ToArray(),
-        Tone = AppSettings.Tones[Math.Max(0, tone.SelectedIndex)],
-        WholeInputApps = wholeInputApps.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-        UiLanguage = DisplayLanguages[Math.Max(0, uiLanguage.SelectedIndex)].Code,
+            row.Language.SelectedValue as string ?? "en")).ToArray(),
+        Tone = tone.SelectedValue as string ?? "natural",
+        WholeInputApps = wholeInputApps.ToArray(),
+        UiLanguage = uiLanguage.SelectedValue as string ?? "",
         CheckForUpdates = checkForUpdates.Checked,
         AutoInstallUpdates = autoInstall.Checked,
     };
@@ -230,24 +368,25 @@ internal sealed class SettingsForm : Form
     {
         var engine = row.Get();
         if (engine.Provider == Provider.None) return;
-        var target = presets.Select(preset => preset.Language.SelectedItem as TargetLanguage).FirstOrDefault() ?? Languages.All[0];
+        var target = Languages.Find(presets[0].Language.SelectedValue as string) ?? Languages.All[0];
         string sample = target.Code == "ko" ? "Hi! What time is the meeting tomorrow? I might be a bit late." : "안녕하세요! 내일 회의 몇 시에 하나요? 조금 늦을 것 같아요.";
         var settings = Collect() with { Primary = engine, Fallback = new EngineChoice(Provider.None, "") };
         row.Test.Enabled = false;
         testResult.Visible = true;
-        testResult.ForeColor = Muted;
+        testResult.ForeColor = Ui.Muted;
         testResult.Text = text.T("Testing {0}…", engine.DisplayName);
         var clock = Stopwatch.StartNew();
         try
         {
             var result = await new Translator(EngineCli.TranslateAsync).TranslateAsync(settings, target, sample, CancellationToken.None);
-            testResult.ForeColor = Color.FromArgb(21, 128, 61);
+            testResult.ForeColor = Ui.Green;
             testResult.Text = $"✓ {engine.DisplayName} · {clock.Elapsed.TotalSeconds:0.0}s · {result.Text}";
         }
         catch (TranslationFailedException failure)
         {
-            testResult.ForeColor = Color.FromArgb(185, 28, 28);
+            testResult.ForeColor = Ui.Red;
             testResult.Text = "✗ " + failure.Message;
+            if (EngineCli.IsSignInError(failure.Primary)) await RefreshSignInAsync();
         }
         finally
         {
@@ -255,77 +394,142 @@ internal sealed class SettingsForm : Form
         }
     }
 
-    private static TableLayoutPanel Grid(int columns)
+    private async Task RefreshSignInAsync()
     {
-        var grid = new TableLayoutPanel { ColumnCount = columns, AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
-        for (int i = 0; i < columns; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        return grid;
+        foreach (var provider in Providers) signIn[provider] = null;
+        ShowAccounts();
+        var claude = EngineCli.CheckSignInAsync(Provider.Claude, CancellationToken.None);
+        var codex = EngineCli.CheckSignInAsync(Provider.Codex, CancellationToken.None);
+        signIn[Provider.Claude] = await claude;
+        signIn[Provider.Codex] = await codex;
+        if (!IsDisposed) ShowAccounts();
     }
 
-    private static Control Section(string title, string? description)
+    private void ShowAccounts()
     {
-        var panel = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Margin = new Padding(0, 16, 0, 0) };
-        panel.Controls.Add(new Label { Text = title, AutoSize = true, Font = new Font("Segoe UI Semibold", 11f), ForeColor = Accent, Margin = Padding.Empty });
-        if (description is not null) panel.Controls.Add(Note(description));
-        return panel;
+        foreach (var (provider, row) in accounts)
+        {
+            var state = signIn[provider];
+            string name = EngineCli.ProductName(provider);
+            switch (state)
+            {
+                case SignIn.SignedIn:
+                    row.Pill.Show($"{name} · {text.T("Signed in")}", Ui.Green, Ui.GreenSoft, Color.FromArgb(21, 128, 61));
+                    break;
+                case SignIn.SignedOut:
+                    row.Pill.Show($"{name} · {text.T("Sign-in needed")}", Ui.Red, Ui.RedSoft, Ui.Red);
+                    break;
+                case SignIn.NotInstalled:
+                    row.Pill.Show($"{name} · {text.T("Not installed")}", Ui.Gray, Ui.Soft, Ui.Muted);
+                    break;
+                case SignIn.Unknown:
+                    row.Pill.Show($"{name} · {text.T("Status unknown")}", Ui.Gray, Ui.Soft, Ui.Muted);
+                    break;
+                default:
+                    row.Pill.Show($"{name} · {text.T("Checking…")}", Ui.Gray, Ui.Soft, Ui.Muted);
+                    break;
+            }
+            row.Action.Visible = state is SignIn.SignedOut or SignIn.NotInstalled or SignIn.Unknown;
+            row.Action.Text = state == SignIn.NotInstalled ? text.T("How to install") : text.T("Sign in");
+        }
+        primary.ShowStatus(signIn);
+        fallback.ShowStatus(signIn);
     }
 
-    private static Label Note(string value) =>
-        new() { Text = value, AutoSize = true, MaximumSize = new Size(560, 0), ForeColor = Muted, Margin = new Padding(0, 3, 0, 0) };
+    private void AccountAction(Provider provider)
+    {
+        try
+        {
+            if (signIn[provider] == SignIn.NotInstalled)
+            {
+                Open(EngineCli.InstallPage(provider));
+                return;
+            }
+            var window = EngineCli.StartSignIn(provider);
+            window.EnableRaisingEvents = true;
+            window.Exited += (_, _) =>
+            {
+                window.Dispose();
+                if (!IsDisposed) BeginInvoke(async () => await RefreshSignInAsync());
+            };
+        }
+        catch (Exception error) when (error is EngineException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            ErrorLog.Write("Could not start sign-in", error);
+            MessageBox.Show(this, error.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
 
-    private static ComboBox Dropdown(int width) =>
-        new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = width, Margin = new Padding(0, 4, 8, 4) };
+    private static Color StatusColor(SignIn? state) => state switch
+    {
+        SignIn.SignedIn => Ui.Green,
+        SignIn.SignedOut => Ui.Red,
+        _ => Ui.Gray,
+    };
 
     private sealed class EngineRow
     {
         private readonly bool allowNone;
+        private readonly UiText text;
+        private readonly IWin32Window owner;
+        private readonly Label dot = new() { Text = "●", AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = Ui.Gray, Margin = new Padding(0, 4, 6, 4), BackColor = Color.Transparent };
         private readonly Label label;
-        private readonly ComboBox provider = Dropdown(150);
-        private readonly ComboBox model = new() { DropDownStyle = ComboBoxStyle.DropDown, Width = 220, Margin = new Padding(0, 4, 8, 4) };
-        public Button Test { get; } = new() { AutoSize = true, FlatStyle = FlatStyle.System, Margin = new Padding(0, 3, 0, 3) };
+        private readonly PillDropdown provider = new(150);
+        private readonly PillDropdown model = new(210);
+        public PillButton Test { get; }
 
-        public EngineRow(string title, bool allowNone, UiText text)
+        public EngineRow(string title, bool allowNone, UiText text, IWin32Window owner)
         {
             this.allowNone = allowNone;
-            label = new Label { Text = title, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 12, 6) };
-            if (allowNone) provider.Items.Add(text.T("None"));
-            provider.Items.AddRange(["Claude Code", "Codex"]);
-            Test.Text = text.T("Test");
-            provider.SelectedIndexChanged += (_, _) => FillModels(AppSettings.DefaultModel(SelectedProvider));
+            this.text = text;
+            this.owner = owner;
+            label = Ui.Text(title, Ui.Ink);
+            label.MinimumSize = new Size(70, 0);
+            Test = new PillButton(text.T("Test"), PillKind.Secondary) { Anchor = AnchorStyles.Left, Margin = new Padding(0, 3, 0, 3) };
+            var providers = new List<(object, string)>();
+            if (allowNone) providers.Add((Provider.None, text.T("None")));
+            providers.Add((Provider.Claude, "Claude Code"));
+            providers.Add((Provider.Codex, "Codex"));
+            provider.SetOptions(providers);
+            provider.SelectionChanged += () => FillModels(AppSettings.DefaultModel(SelectedProvider));
+            model.AllowCustom(text.T("Enter a model name…"), () => InputDialog.Ask(owner, text.T("Model"),
+                text.T("Type the exact model name, for example claude-opus-5-5."), text.T("OK"), text.T("Cancel")));
         }
 
-        private Provider SelectedProvider => (Provider)(provider.SelectedIndex + (allowNone ? 0 : 1));
+        public event Action? Changed;
 
-        public void AddTo(TableLayoutPanel grid) => grid.Controls.AddRange([label, provider, model, Test]);
+        private Provider SelectedProvider => provider.SelectedValue is Provider value ? value : Provider.Claude;
+
+        public void AddTo(TableLayoutPanel grid) => grid.Controls.AddRange([dot, label, provider, model, Test]);
 
         public void Set(EngineChoice engine)
         {
-            provider.SelectedIndex = (int)engine.Provider - (allowNone ? 0 : 1);
+            provider.Select(engine.Provider);
             FillModels(engine.Model);
         }
 
         public EngineChoice Get()
         {
             var selected = SelectedProvider;
-            string value = ModelOption.Resolve(model.Items.OfType<ModelOption>(), model.Text);
+            string value = model.SelectedValue as string ?? "";
             return new EngineChoice(selected, selected == Provider.None ? "" : AppSettings.IsValidModel(value) ? value : AppSettings.DefaultModel(selected));
+        }
+
+        public void ShowStatus(IReadOnlyDictionary<Provider, SignIn?> states)
+        {
+            var choice = SelectedProvider;
+            dot.Visible = choice != Provider.None;
+            if (choice != Provider.None) dot.ForeColor = StatusColor(states[choice]);
         }
 
         private void FillModels(string selected)
         {
-            model.Items.Clear();
             var choice = SelectedProvider;
             model.Enabled = Test.Enabled = choice != Provider.None;
-            if (choice == Provider.None)
-            {
-                model.Text = "";
-                return;
-            }
-            var options = EngineCli.SuggestedModels(choice);
-            model.Items.AddRange([.. options]);
-            var match = options.FirstOrDefault(option => option.Id.Equals(selected, StringComparison.OrdinalIgnoreCase));
-            if (match is not null) model.SelectedItem = match;
-            else model.Text = selected;
+            model.SetOptions(EngineCli.SuggestedModels(choice).Select(option => ((object)option.Id, option.Label)));
+            if (choice != Provider.None && selected.Length > 0) model.Select(selected);
+            else model.SelectIndex(-1);
+            Changed?.Invoke();
         }
     }
 }
@@ -339,7 +543,11 @@ internal sealed class HotkeyBox : TextBox
     {
         this.text = text;
         ReadOnly = true;
+        BorderStyle = BorderStyle.None;
         BackColor = Color.White;
+        Dock = DockStyle.Fill;
+        TextAlign = HorizontalAlignment.Center;
+        Font = Ui.Bold(9.5f);
         Cursor = Cursors.Hand;
     }
 

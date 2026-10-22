@@ -20,39 +20,40 @@
     color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 15px; }
   .name { font-weight: 600; font-size: 15px; color: #111827; }
   .status { font-size: 12px; color: #10b981; }
-  .chat { flex: 1; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; background: #f8fafc; }
-  .bubble { max-width: 76%; padding: 9px 13px; border-radius: 16px; font-size: 14.5px; line-height: 1.4; }
+  .badge { margin-left: auto; font-size: 12.5px; font-weight: 600; color: #1d4ed8; background: #eaf1ff; padding: 6px 12px; border-radius: 999px; }
+  .chat { flex: 1; padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; background: #f8fafc; overflow: hidden; }
+  .bubble { max-width: 78%; padding: 8px 13px; border-radius: 16px; font-size: 14px; line-height: 1.4; }
   .in { background: #fff; border: 1px solid #e5e7eb; align-self: flex-start; border-bottom-left-radius: 5px; color: #111827; }
   .out { background: #2563eb; color: #fff; align-self: flex-end; border-bottom-right-radius: 5px; }
   .composer { height: 64px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-top: 1px solid #eef0f4; }
-  .input { flex: 1; min-height: 40px; border-radius: 20px; background: #f1f5f9; padding: 10px 16px; font-size: 14.5px; color: #111827;
-    display: flex; align-items: center; white-space: nowrap; overflow: hidden; }
-  .input .text.selected { background: #bfdbfe; border-radius: 3px; }
-  .input .text.fresh { background: #dcfce7; border-radius: 3px; transition: none; }
+  .input { flex: 1; min-height: 40px; border-radius: 20px; background: #f1f5f9; padding: 10px 16px; font-size: 14px; color: #111827;
+    display: flex; align-items: center; white-space: pre; overflow: hidden; position: relative; }
+  .sel { background: #bfdbfe; border-radius: 3px; }
+  .fresh { background: #dcfce7; border-radius: 3px; }
   .placeholder { color: #94a3b8; }
   .caret { display: inline-block; width: 1.5px; height: 18px; background: #2563eb; margin-left: 1px; }
   .send { width: 40px; height: 40px; border-radius: 50%; background: #2563eb; display: flex; align-items: center; justify-content: center; }
   .send svg { width: 18px; height: 18px; fill: #fff; }
-  .chip { position: absolute; left: 0; top: 0; background: #2563eb; color: #fff; font-size: 13px; padding: 7px 12px; border-radius: 8px;
+  .chip { position: absolute; left: 0; top: 0; background: #2563eb; color: #fff; font-size: 13px; padding: 7px 12px; border-radius: 999px;
     box-shadow: 0 6px 18px rgba(37, 99, 235, .35); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
   .spinner { width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; }
   .keys { position: absolute; left: 50%; top: 190px; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; }
-  .key { min-width: 54px; height: 50px; padding: 0 14px; border-radius: 10px; background: #111827; color: #fff; font-size: 18px; font-weight: 600;
+  .key { min-width: 54px; height: 50px; padding: 0 14px; border-radius: 12px; background: #111827; color: #fff; font-size: 18px; font-weight: 600;
     display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 0 #374151, 0 10px 24px rgba(17,24,39,.25); }
   .plus { color: #475569; font-size: 20px; font-weight: 700; }
+  .pointer { position: absolute; width: 18px; height: 22px; pointer-events: none; }
   .caption { text-align: center; font-size: 14px; color: #475569; }
   .caption b { color: #1d4ed8; }
 </style>
 </head>
 <body>
-<div class="window">
+<div class="window" id="window">
   <div class="titlebar">
     <div class="avatar">A</div>
     <div><div class="name">Alex</div><div class="status">online</div></div>
+    <div class="badge" id="badge"></div>
   </div>
-  <div class="chat" id="chat">
-    <div class="bubble in">Hey! Are you joining the meeting tomorrow?</div>
-  </div>
+  <div class="chat" id="chat"></div>
   <div class="composer">
     <div class="input" id="input"></div>
     <div class="send"><svg viewBox="0 0 24 24"><title>Send</title><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></div>
@@ -60,66 +61,113 @@
 </div>
 <div class="keys" id="keys"><div class="key">Ctrl</div><div class="plus">+</div><div class="key">Alt</div><div class="plus">+</div><div class="key">T</div></div>
 <div class="chip" id="chip"><div class="spinner" id="spinner"></div><span id="chipText"></span></div>
+<svg class="pointer" id="pointer" viewBox="0 0 18 22"><title>Pointer</title><path d="M1 1l0 17 4.5-4 3 7 3-1.4-3-6.8 6.2 0z" fill="#111827" stroke="#fff" stroke-width="1.2"/></svg>
 <div class="caption" id="caption"></div>
 <script>
-  const params = new URLSearchParams(location.search);
-  const lang = params.get("lang") === "en" ? "en" : "ko";
+  const lang = new URLSearchParams(location.search).get("lang") === "en" ? "en" : "ko";
   const copy = {
-    ko: { placeholder: "메시지 입력", busy: "English 번역 중…", caption: "쓰고 <b>Ctrl+Alt+T</b> 한 번 · 그 자리에서 바로 번역" },
-    en: { placeholder: "Message", busy: "Translating to English…", caption: "Type, press <b>Ctrl+Alt+T</b> · translated right where you typed" },
+    ko: {
+      placeholder: "메시지 입력", busy: "English 번역 중…",
+      badgeA: "① 그냥 누르면 → 입력창 전체", badgeB: "② 드래그 후 누르면 → 선택한 부분만",
+      captionA: "메신저에서는 선택 없이 <b>Ctrl+Alt+T</b> · 쓴 글 전체가 번역됩니다",
+      captionB: "드래그로 고른 뒤 <b>Ctrl+Alt+T</b> · 그 부분만 번역됩니다",
+    },
+    en: {
+      placeholder: "Message", busy: "Translating to English…",
+      badgeA: "① Just press → whole message", badgeB: "② Drag, then press → only the selection",
+      captionA: "In chat apps, just press <b>Ctrl+Alt+T</b> · the whole message is translated",
+      captionB: "Drag-select, then <b>Ctrl+Alt+T</b> · only that part is translated",
+    },
   }[lang];
-  const korean = "응! 근데 몇 시에 시작해? 조금 늦을 것 같아 ㅠㅠ";
-  const english = "Yes! But what time does it start? I'm worried I might be a bit late ㅠㅠ";
-  const T = { typeStart: 0.5, typeEnd: 3.0, keys: 3.5, keysEnd: 4.5, busyEnd: 6.6, send: 8.0, end: 10.0 };
 
-  const input = document.getElementById("input");
-  const chat = document.getElementById("chat");
-  const chip = document.getElementById("chip");
-  const keys = document.getElementById("keys");
-  document.getElementById("caption").innerHTML = copy.caption;
-  document.getElementById("chipText").textContent = copy.busy;
+  const A = {
+    from: "Hey! Are you joining the meeting tomorrow?",
+    typed: "응! 근데 몇 시에 시작해? 조금 늦을 것 같아 ㅠㅠ",
+    result: "Yes! But what time does it start? I'm worried I might be a bit late ㅠㅠ",
+  };
+  const B = {
+    from: "No worries, it starts at 2. Can you send the slides?",
+    prefix: "Thanks for today! ",
+    korean: "내일 회의 자료는 오후 3시까지 보내드릴게요.",
+    english: "I'll send the meeting materials by 3 PM tomorrow.",
+  };
+  const SA = { type: [0.4, 2.6], keys: 3.0, keysEnd: 3.9, busyEnd: 5.6, send: 7.0, end: 8.6 };
+  const SB = { reply: 0.2, type: [0.6, 3.0], drag: [3.3, 4.1], keys: 4.5, keysEnd: 5.4, busyEnd: 7.0, send: 8.4, end: 10.2 };
+  const TOTAL = SA.end + SB.end;
 
+  const $ = (id) => document.getElementById(id);
   const clamp = (v) => Math.max(0, Math.min(1, v));
   const ease = (v) => 1 - Math.pow(1 - clamp(v), 3);
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 
-  window.render = (t) => {
-    let text = "", cls = "", caret = true, sent = false;
-    if (t < T.typeStart) text = "";
-    else if (t < T.typeEnd) text = korean.slice(0, Math.round(korean.length * (t - T.typeStart) / (T.typeEnd - T.typeStart)));
-    else if (t < T.busyEnd) { text = korean; if (t >= T.keys) { cls = "selected"; caret = false; } }
-    else if (t < T.send) { text = english; cls = t < T.busyEnd + 0.7 ? "fresh" : ""; }
-    else { text = ""; sent = true; }
-    input.innerHTML = text
-      ? `<span class="text ${cls}"></span>${caret ? '<span class="caret"></span>' : ""}`
-      : `<span class="placeholder">${copy.placeholder}</span>`;
-    if (text) input.querySelector(".text").textContent = text;
+  function bubble(cls, text, appearAt, t) {
+    const p = ease((t - appearAt) / 0.35);
+    return `<div class="bubble ${cls}" style="opacity:${p};transform:translateY(${(1 - p) * 12}px)">${esc(text)}</div>`;
+  }
 
-    for (const node of chat.querySelectorAll(".out")) node.remove();
-    if (sent) {
-      const bubble = document.createElement("div");
-      bubble.className = "bubble out";
-      bubble.textContent = english;
-      const p = ease((t - T.send) / 0.35);
-      bubble.style.opacity = p;
-      bubble.style.transform = `translateY(${(1 - p) * 14}px)`;
-      chat.appendChild(bubble);
+  function setInput(parts, caret) {
+    if (!parts.length) { $("input").innerHTML = `<span class="placeholder">${copy.placeholder}</span>`; return; }
+    $("input").innerHTML = parts.map(([text, cls]) => `<span class="${cls || ""}">${esc(text)}</span>`).join("") + (caret ? '<span class="caret"></span>' : "");
+  }
+
+  function overlays(t, keysAt, keysEnd, busyEnd) {
+    const keyIn = ease((t - keysAt) / 0.2), keyOut = ease((t - keysEnd) / 0.25);
+    $("keys").style.opacity = t < keysAt ? 0 : keyIn * (1 - keyOut);
+    $("keys").style.transform = `translateX(-50%) scale(${0.92 + 0.08 * keyIn})`;
+    const busy = t >= keysAt + 0.25 && t < busyEnd;
+    $("chip").style.opacity = busy ? ease((t - keysAt - 0.25) / 0.15) : 0;
+    const box = $("input").getBoundingClientRect();
+    $("chip").style.left = `${Math.min(box.left + 40, 520)}px`;
+    $("chip").style.top = `${box.top - 46}px`;
+    $("spinner").style.transform = `rotate(${t * 540}deg)`;
+  }
+
+  window.render = (time) => {
+    const t = time % TOTAL;
+    $("pointer").style.opacity = 0;
+    if (t < SA.end) {
+      $("badge").textContent = copy.badgeA;
+      $("caption").innerHTML = copy.captionA;
+      let chat = bubble("in", A.from, -1, t);
+      if (t >= SA.send) chat += bubble("out", A.result, SA.send, t);
+      $("chat").innerHTML = chat;
+      if (t < SA.type[0]) setInput([], false);
+      else if (t < SA.type[1]) setInput([[A.typed.slice(0, Math.round(A.typed.length * (t - SA.type[0]) / (SA.type[1] - SA.type[0])))]], true);
+      else if (t < SA.busyEnd) setInput([[A.typed, t >= SA.keys ? "sel" : ""]], t < SA.keys);
+      else if (t < SA.send) setInput([[A.result, t < SA.busyEnd + 0.8 ? "fresh" : ""]], true);
+      else setInput([], false);
+      overlays(t, SA.keys, SA.keysEnd, SA.busyEnd);
+    } else {
+      const s = t - SA.end;
+      $("badge").textContent = copy.badgeB;
+      $("caption").innerHTML = copy.captionB;
+      let chat = bubble("in", A.from, -1, 99) + bubble("out", A.result, -1, 99) + bubble("in", B.from, SB.reply, s);
+      if (s >= SB.send) chat += bubble("out", B.prefix + B.english, SB.send, s);
+      $("chat").innerHTML = chat;
+      const full = B.prefix + B.korean;
+      if (s < SB.type[0]) setInput([], false);
+      else if (s < SB.type[1]) setInput([[full.slice(0, Math.round(full.length * (s - SB.type[0]) / (SB.type[1] - SB.type[0])))]], true);
+      else if (s < SB.drag[0]) setInput([[full]], true);
+      else if (s < SB.busyEnd) {
+        const n = Math.round(B.korean.length * ease((s - SB.drag[0]) / (SB.drag[1] - SB.drag[0])));
+        setInput([[B.prefix], [B.korean.slice(0, n), "sel"], [B.korean.slice(n)]], false);
+        const spans = $("input").querySelectorAll("span");
+        const edge = spans[1].getBoundingClientRect();
+        if (s < SB.keys) {
+          $("pointer").style.opacity = 1;
+          $("pointer").style.left = `${edge.right - 2}px`;
+          $("pointer").style.top = `${edge.top + 6}px`;
+        }
+      }
+      else if (s < SB.send) setInput([[B.prefix], [B.english, s < SB.busyEnd + 0.9 ? "fresh" : ""]], true);
+      else setInput([], false);
+      overlays(s, SB.keys, SB.keysEnd, SB.busyEnd);
     }
-
-    const keyIn = ease((t - T.keys) / 0.2), keyOut = ease((t - T.keysEnd) / 0.25);
-    keys.style.opacity = t < T.keys ? 0 : keyIn * (1 - keyOut);
-    keys.style.transform = `translateX(-50%) scale(${0.92 + 0.08 * keyIn})`;
-
-    const busy = t >= T.keys + 0.25 && t < T.busyEnd;
-    chip.style.opacity = busy ? ease((t - T.keys - 0.25) / 0.15) : 0;
-    const box = input.getBoundingClientRect();
-    chip.style.left = `${Math.min(box.left + 40, 520)}px`;
-    chip.style.top = `${box.top - 44}px`;
-    document.getElementById("spinner").style.transform = `rotate(${t * 540}deg)`;
-
-    const fade = t > T.end - 0.35 ? 1 - ease((t - (T.end - 0.35)) / 0.35) : 1;
-    document.querySelector(".window").style.opacity = fade;
+    const fadeStart = TOTAL - 0.35;
+    $("window").style.opacity = t > fadeStart ? 1 - ease((t - fadeStart) / 0.35) : 1;
   };
-  window.duration = T.end;
+  $("chipText").textContent = copy.busy;
+  window.duration = TOTAL;
   render(0);
 </script>
 </body>

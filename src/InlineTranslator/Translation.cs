@@ -23,6 +23,14 @@ public enum CaptureMode { Selection, WholeInput, NeedSelection }
 
 public static class Capture
 {
+    public const int WholeInputMaxCharacters = 2000;
+    public const int WholeInputMaxLines = 30;
+
+    // A chat message box rarely holds this much; more means Ctrl+A grabbed a whole document,
+    // for example when a document editor was added to the whole-input list by mistake.
+    public static bool LooksLikeWholeDocument(string text) =>
+        text.Length > WholeInputMaxCharacters || text.Count(c => c == '\n') + 1 > WholeInputMaxLines;
+
     public static CaptureMode Decide(bool selectionCopied, string? processName, IEnumerable<string> wholeInputApps)
     {
         if (selectionCopied) return CaptureMode.Selection;

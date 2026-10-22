@@ -28,6 +28,8 @@ internal static class Program
             ("CLI arguments keep sessions unsaved and tools disabled", EngineArguments),
             ("Codex model cache parsing", CodexModels),
             ("model labels resolve to model IDs", ModelLabels),
+            ("sign-in status parsing and sign-in error detection", SignInStatus),
+            ("app catalog keeps real apps and merges running ones", AppCatalogMerge),
             ("Codex errors expose only the ERROR message", CodexErrors),
             ("process runner passes stdin and returns exit codes", ProcessRoundtrip),
             ("process runner kills the CLI on timeout", ProcessTimeout),
@@ -198,6 +200,12 @@ internal static class Program
         Equal(CaptureMode.WholeInput, Capture.Decide(false, "KakaoTalk.exe", apps));
         Equal(CaptureMode.NeedSelection, Capture.Decide(false, "WINWORD", apps));
         Equal(CaptureMode.NeedSelection, Capture.Decide(false, null, apps));
+
+        Check(!Capture.LooksLikeWholeDocument("응! 근데 몇 시에 시작해?\n조금 늦을 것 같아"), "chat message passes");
+        Check(Capture.LooksLikeWholeDocument(new string('가', Capture.WholeInputMaxCharacters + 1)), "very long text is a document");
+        Check(Capture.LooksLikeWholeDocument(string.Join("\n", Enumerable.Repeat("line", Capture.WholeInputMaxLines + 1))), "many lines is a document");
+        Check(!Capture.LooksLikeWholeDocument(string.Join("\n", Enumerable.Repeat("line", Capture.WholeInputMaxLines))), "line limit is inclusive");
+        Check(AppCatalog.IsKnownChatApp("telegram.exe") && !AppCatalog.IsKnownChatApp("WINWORD"), "known chat apps");
     }
 
     private static void TranslatorFallback()
@@ -293,6 +301,53 @@ internal static class Program
         Equal("Claude · opus", new EngineChoice(Provider.Claude, "opus").DisplayName);
     }
 
+    private static void SignInStatus()
+    {
+        Equal(SignIn.SignedIn, EngineCli.ParseClaudeSignIn(new ProcessResult(0, "{\"loggedIn\":true,\"authMethod\":\"claude.ai\"}", "")));
+        Equal(SignIn.SignedOut, EngineCli.ParseClaudeSignIn(new ProcessResult(1, "{\"loggedIn\":false}", "")));
+        Equal(SignIn.SignedOut, EngineCli.ParseClaudeSignIn(new ProcessResult(1, "not json", "")));
+        Equal(SignIn.Unknown, EngineCli.ParseClaudeSignIn(new ProcessResult(0, "not json", "")));
+        Equal(SignIn.SignedIn, EngineCli.ParseCodexSignIn(new ProcessResult(0, "Logged in using ChatGPT\n", "")));
+        Equal(SignIn.SignedOut, EngineCli.ParseCodexSignIn(new ProcessResult(1, "", "Not logged in\n")));
+        Equal(SignIn.SignedOut, EngineCli.ParseCodexSignIn(new ProcessResult(0, "Not logged in", "")));
+
+        Check(EngineCli.IsSignInError(new EngineException("Claude Code: Failed to authenticate: OAuth session expired and could not be refreshed")), "expired OAuth");
+        Check(EngineCli.IsSignInError(new EngineException("Codex: 401 Unauthorized")), "401");
+        Check(EngineCli.IsSignInError(new EngineException("Codex: Not logged in. Run codex login.")), "not logged in");
+        Check(!EngineCli.IsSignInError(new EngineException("Codex CLI was not found. Install it and sign in once.")), "missing CLI is not a sign-in problem");
+        Check(!EngineCli.IsSignInError(new EngineException("Codex: The 'gpt-6-luna' model is not supported.")), "model errors are not sign-in problems");
+        Check(!EngineCli.IsSignInError(new TimeoutException("login took too long")), "only engine errors count");
+
+        string line = EngineCli.SignInCommandLine(@"C:\Program Files\Claude\claude.exe", Provider.Claude);
+        Equal("/d /c \"\"C:\\Program Files\\Claude\\claude.exe\" auth login & echo. & pause\"", line);
+        Check(EngineCli.SignInCommandLine("codex.exe", Provider.Codex).Contains("\"codex.exe\" login &", StringComparison.Ordinal), "codex login command");
+    }
+
+    private static void AppCatalogMerge()
+    {
+        Check(AppCatalog.IsUsefulShortcut("Telegram", @"C:\Apps\Telegram\Telegram.exe"), "normal app kept");
+        Check(!AppCatalog.IsUsefulShortcut("Uninstall Telegram", @"C:\Apps\Telegram\unins000.exe"), "uninstaller dropped");
+        Check(!AppCatalog.IsUsefulShortcut("카카오톡 제거", @"C:\Apps\Kakao\uninstall.exe"), "Korean uninstaller dropped");
+        Check(!AppCatalog.IsUsefulShortcut("Manual", @"C:\Apps\manual.pdf"), "documents dropped");
+
+        var merged = AppCatalog.Merge(
+            [
+                new AppEntry("KakaoTalk", "카카오톡", @"C:\Kakao\KakaoTalk.exe", false),
+                new AppEntry("KakaoTalk", "카카오톡 (두 번째 바로가기)", @"C:\Kakao\KakaoTalk.exe", false),
+                new AppEntry("Notepad.exe", "메모장", null, false),
+            ],
+            [
+                new AppEntry("Telegram", "Telegram", @"C:\T\Telegram.exe", true),
+                new AppEntry("kakaotalk", "채팅", null, true),
+            ]);
+        Equal("KakaoTalk,Telegram", string.Join(",", merged.Take(2).Select(app => app.ProcessName).Order()));
+        Equal("Notepad", merged[2].ProcessName);
+        var kakao = merged.Single(app => app.ProcessName == "KakaoTalk");
+        Equal("카카오톡", kakao.DisplayName);
+        Check(kakao.Running && kakao.ExecutablePath is not null, "installed entry marked running");
+        Check(merged.Take(2).All(app => app.Running), "running apps first");
+    }
+
     private static void CodexErrors()
     {
         string stderr = "user\n안녕하세요 비밀 메시지\nERROR: {\"type\":\"error\",\"status\":400,\"error\":{\"type\":\"invalid_request_error\",\"message\":\"The 'gpt-6-luna' model is not supported.\"}}\n";
@@ -337,7 +392,7 @@ internal static class Program
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://github.com/a","assets":[{"name":"inline-translator-win-x64.zip","browser_download_url":"https://github.com/x"}]}""")!.PackageUrl is null, "no digest means no automatic install");
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://evil.example/"}""") is null, "non-GitHub page rejected");
         Check(Parse("""{"tag_name":"latest","html_url":"https://github.com/a"}""") is null, "non-version tag rejected");
-        Equal(new Version(0, 1, 2), UpdateChecker.Current);
+        Equal(new Version(0, 1, 3), UpdateChecker.Current);
     }
 
     private static void UpdateInstall()

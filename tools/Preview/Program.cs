@@ -10,6 +10,20 @@ internal static class Program
     {
         ApplicationConfiguration.Initialize();
         if (args is ["render", var folder]) return Render(folder);
+        if (args is ["lnk", var shortcut])
+        {
+            try { Console.WriteLine("target: " + AppCatalog.ShortcutTarget(shortcut)); }
+            catch (Exception error) { Console.WriteLine(error); }
+            return 0;
+        }
+        if (args is ["apps"])
+        {
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+            var apps = AppCatalog.Discover();
+            Console.WriteLine($"{apps.Count} apps");
+            foreach (var app in apps.Take(40)) Console.WriteLine($"{app.ProcessName} | {app.DisplayName} | running={app.Running}");
+            return 0;
+        }
         if (args is ["translate", var provider, var model, var language, var message]) return Translate(provider, model, language, message);
         Console.Error.WriteLine("usage: Preview render <folder> | Preview translate <Claude|Codex> <model> <language> <text>");
         return 2;
@@ -29,13 +43,29 @@ internal static class Program
             using var icon = AppIcon.Load();
             using var form = new SettingsForm(settings, new UiText(language), icon, null, _ => [], () => Task.CompletedTask, _ => { });
             form.Show();
-            Application.DoEvents();
+            var settle = Stopwatch.StartNew();
+            while (settle.Elapsed < TimeSpan.FromSeconds(4))
+            {
+                Application.DoEvents();
+                Thread.Sleep(50);
+            }
             using var bitmap = new Bitmap(form.Width, form.Height);
             form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
             string path = Path.Combine(folder, $"settings-{language}.png");
             bitmap.Save(path);
             Console.WriteLine($"{path} {form.Width}x{form.Height}");
             form.Close();
+        }
+        using (var picker = new AppPicker(new UiText("ko"), ["Telegram", "KakaoTalk"]))
+        {
+            picker.Show();
+            Application.DoEvents();
+            using var bitmap = new Bitmap(picker.Width, picker.Height);
+            picker.DrawToBitmap(bitmap, new Rectangle(Point.Empty, picker.Size));
+            string path = Path.Combine(folder, "..", "..", "artifacts", "app-picker-ko.png");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            bitmap.Save(path);
+            Console.WriteLine($"{path} {picker.Width}x{picker.Height}");
         }
         return 0;
     }

@@ -32,7 +32,7 @@ public sealed record AppSettings
     ];
 
     public static readonly IReadOnlyList<string> DefaultWholeInputApps =
-        ["Telegram", "KakaoTalk", "slack", "Discord", "WhatsApp", "LINE", "ms-teams", "Teams", "Signal"];
+        ["Telegram", "KakaoTalk", "Slack", "Discord", "WhatsApp", "LINE", "ms-teams", "Teams", "Signal"];
 
     public string UiLanguage { get; init; } = "";
     public EngineChoice Primary { get; init; } = new(Provider.Claude, DefaultClaudeModel);
