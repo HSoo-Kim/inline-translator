@@ -8,14 +8,21 @@ Tired of opening ChatGPT or Claude, pasting, copying and switching back just to 
 
 Now it is **one hotkey, right where you are typing**. In a few seconds your text turns into the translation in place.
 
+> **Never pick a source language.** Korean, Japanese, a mix of several — whatever you write in is detected automatically and turned into the language you chose. The only choice is what to translate *into*.
+
 <p align="center"><img src="docs/images/demo-en.gif" width="800" alt="Typing Korean in a chat box, pressing Ctrl+Alt+T, and the text becoming English"></p>
 <p align="center"><sub>A reenactment built from a real Claude Haiku translation.</sub></p>
 
 ## How it works
 
-1. Type as usual — Telegram, Slack, email, documents, anywhere.
-2. Select what you want translated and press **`Ctrl+Alt+T`**. In chat apps you can skip selecting: the whole input box is translated.
-3. Two to four seconds later the translation replaces your text. Don't like it? `Ctrl+Z`.
+| Do this | Get this |
+|---|---|
+| 💬 In a chat input box, **just press `Ctrl+Alt+T`** | The **whole message** you typed is translated |
+| 🖱️ **Drag to select, then press `Ctrl+Alt+T`** | **Only the selection** is translated (chat, email, documents, anywhere) |
+
+- Two to four seconds later the translation replaces your text. Don't like it? `Ctrl+Z`.
+- Apps where no selection means the whole input box: Telegram, KakaoTalk, Slack, Discord, WhatsApp, LINE, Teams, Signal. Add or remove apps in Settings.
+- Everywhere else (Word, browsers, …) only the selection is translated, so a whole document is never replaced by accident.
 
 ## Features
 
@@ -28,7 +35,7 @@ Now it is **one hotkey, right where you are typing**. In a few seconds your text
 - **Safe by default** — if you switch windows while it is translating, the result goes to the clipboard instead of being pasted. Your previous clipboard is restored.
 - **Nothing recorded** — translated text is never written to disk or to Windows clipboard history (`Win+V`).
 - **One-click update** — when a new version is out, an `Update` button appears in the tray menu and Settings. Click it to download, replace and restart.
-- **Interface languages** — 한국어, English, 简体中文, 日本語.
+- **Interface languages** — 한국어, English, 简体中文, 日本語. Switch at the top of Settings or from the tray menu.
 
 ## Getting started
 
@@ -51,7 +58,8 @@ Built for Windows 11 x64. The executable includes .NET, so nothing else to insta
 | Translation engine | Main engine and the one to use if it fails. Pick a model from the list or type its name. |
 | Hotkeys and target languages | Click a hotkey box and press the combination you want. |
 | Apps that translate the whole input box | In these apps the hotkey works without selecting. Default: Telegram, KakaoTalk, Slack, Discord, WhatsApp, LINE, Teams, Signal |
-| General | Interface language, start with Windows, update checks |
+| Display language | Language of the app itself; applies immediately. |
+| General | Start with Windows, update checks |
 
 ## Data and privacy
 

@@ -19,6 +19,7 @@ internal sealed class TrayApp : ApplicationContext
     private readonly ToolStripMenuItem updateItem = new() { Visible = false };
     private readonly ToolStripMenuItem settingsItem = new();
     private readonly ToolStripMenuItem pauseItem = new() { CheckOnClick = true };
+    private readonly ToolStripMenuItem languageItem = new();
     private readonly ToolStripMenuItem exitItem = new();
     private readonly ToolStripLabel titleItem = new() { Enabled = false };
     private AppSettings settings;
@@ -36,7 +37,13 @@ internal sealed class TrayApp : ApplicationContext
         hotkeys.ActivationRequested += ShowSettings;
 
         var menu = new ContextMenuStrip();
-        menu.Items.AddRange([titleItem, new ToolStripSeparator(), updateItem, settingsItem, pauseItem, new ToolStripSeparator(), exitItem]);
+        menu.Items.AddRange([titleItem, new ToolStripSeparator(), updateItem, settingsItem, languageItem, pauseItem, new ToolStripSeparator(), exitItem]);
+        foreach (var (code, name) in SettingsForm.DisplayLanguages)
+        {
+            var item = new ToolStripMenuItem(name) { Tag = code };
+            item.Click += (_, _) => ChangeDisplayLanguage(code);
+            languageItem.DropDownItems.Add(item);
+        }
         updateItem.Click += async (_, _) => await InstallUpdateAsync();
         settingsItem.Click += (_, _) => ShowSettings();
         pauseItem.CheckedChanged += (_, _) => ApplyHotkeys(notify: true);
@@ -64,6 +71,12 @@ internal sealed class TrayApp : ApplicationContext
         settingsItem.Text = text.T("Settings…");
         pauseItem.Text = text.T("Pause hotkeys");
         exitItem.Text = text.T("Exit");
+        languageItem.Text = SettingsForm.LanguageLabel(text);
+        foreach (ToolStripMenuItem item in languageItem.DropDownItems)
+        {
+            item.Checked = (string)item.Tag! == settings.UiLanguage;
+            if ((string)item.Tag! == "") item.Text = text.T("System default");
+        }
         if (update is not null) updateItem.Text = text.T("Update to {0}", update.Tag);
         var active = settings.Presets.Where(preset => preset.Enabled)
             .Select(preset => $"{preset.Hotkey} → {Languages.Find(preset.TargetLanguage)?.NativeName}");
@@ -95,10 +108,26 @@ internal sealed class TrayApp : ApplicationContext
             settingsForm.Activate();
             return;
         }
-        settingsForm = new SettingsForm(settings, text, icon, update, SaveSettings, InstallUpdateAsync);
+        settingsForm = new SettingsForm(settings, text, icon, update, SaveSettings, InstallUpdateAsync, ChangeDisplayLanguage);
         settingsForm.FormClosed += (_, _) => settingsForm = null;
         settingsForm.Show();
         settingsForm.Activate();
+    }
+
+    private void ChangeDisplayLanguage(string code)
+    {
+        bool reopen = settingsForm is { IsDisposed: false };
+        settingsForm?.Close();
+        try
+        {
+            SaveSettings(settings with { UiLanguage = code });
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            ErrorLog.Write("Could not save settings", error);
+            Notify(text.T("Could not save settings: {0}", error.Message), ToolTipIcon.Error);
+        }
+        if (reopen) ShowSettings();
     }
 
     private IReadOnlyList<string> SaveSettings(AppSettings updated)

@@ -25,7 +25,7 @@ internal sealed class SettingsForm : Form
     private readonly Button updateButton = new() { AutoSize = true, Visible = false, FlatStyle = FlatStyle.System };
 
     public SettingsForm(AppSettings settings, UiText text, Icon icon, ReleaseInfo? update,
-        Func<AppSettings, IReadOnlyList<string>> save, Func<Task> installUpdate)
+        Func<AppSettings, IReadOnlyList<string>> save, Func<Task> installUpdate, Action<string> changeLanguage)
     {
         this.text = text;
         original = settings;
@@ -56,6 +56,13 @@ internal sealed class SettingsForm : Form
             Padding = new Padding(24, 18, 24, 16),
         };
         Controls.Add(root);
+
+        var languageRow = Grid(2);
+        languageRow.Margin = Padding.Empty;
+        languageRow.Controls.Add(new Label { Text = LanguageLabel(text), AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 12, 6) });
+        uiLanguage.Items.AddRange([.. DisplayLanguages.Select(language => language.Code == "" ? text.T("System default") : language.Name)]);
+        languageRow.Controls.Add(uiLanguage);
+        root.Controls.Add(languageRow);
 
         root.Controls.Add(Section(text.T("Translation engine"),
             text.T("Uses the Claude Code or Codex you are already signed in to on this PC. No API key needed.")));
@@ -93,11 +100,6 @@ internal sealed class SettingsForm : Form
         root.Controls.Add(wholeInputApps);
 
         root.Controls.Add(Section(text.T("General"), null));
-        var languageRow = Grid(2);
-        languageRow.Controls.Add(new Label { Text = text.T("Display language"), AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 12, 6) });
-        uiLanguage.Items.AddRange([text.T("System default"), "한국어", "English", "简体中文", "日本語"]);
-        languageRow.Controls.Add(uiLanguage);
-        root.Controls.Add(languageRow);
         startWithWindows.Text = text.T("Start with Windows");
         startWithWindows.Enabled = StartWithWindows.Executable is not null;
         checkForUpdates.Text = text.T("Check for new versions");
@@ -136,7 +138,18 @@ internal sealed class SettingsForm : Form
 
         LoadSettings(settings);
         SetUpdate(update);
+        uiLanguage.SelectionChangeCommitted += (_, _) =>
+        {
+            string code = DisplayLanguages[Math.Max(0, uiLanguage.SelectedIndex)].Code;
+            BeginInvoke(() => changeLanguage(code));
+        };
     }
+
+    public static readonly IReadOnlyList<(string Code, string Name)> DisplayLanguages =
+        [("", "System default"), ("ko", "한국어"), ("en", "English"), ("zh-CN", "简体中文"), ("ja", "日本語")];
+
+    public static string LanguageLabel(UiText text) =>
+        text.Language == "en" ? text.T("Display language") : text.T("Display language") + " (Language)";
 
     public void SetUpdate(ReleaseInfo? release)
     {
@@ -157,7 +170,7 @@ internal sealed class SettingsForm : Form
         }
         tone.SelectedIndex = Math.Max(0, Array.IndexOf(AppSettings.Tones, settings.Tone));
         wholeInputApps.Text = string.Join(", ", settings.WholeInputApps);
-        uiLanguage.SelectedIndex = Array.IndexOf(AppSettings.UiLanguages, settings.UiLanguage) + 1;
+        uiLanguage.SelectedIndex = Math.Max(0, DisplayLanguages.ToList().FindIndex(language => language.Code == settings.UiLanguage));
         startWithWindows.Checked = StartWithWindows.IsEnabled;
         checkForUpdates.Checked = settings.CheckForUpdates;
         autoInstall.Checked = settings.AutoInstallUpdates;
@@ -177,7 +190,7 @@ internal sealed class SettingsForm : Form
             (row.Language.SelectedItem as TargetLanguage)?.Code ?? "en")).ToArray(),
         Tone = AppSettings.Tones[Math.Max(0, tone.SelectedIndex)],
         WholeInputApps = wholeInputApps.Text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-        UiLanguage = uiLanguage.SelectedIndex <= 0 ? "" : AppSettings.UiLanguages[uiLanguage.SelectedIndex - 1],
+        UiLanguage = DisplayLanguages[Math.Max(0, uiLanguage.SelectedIndex)].Code,
         CheckForUpdates = checkForUpdates.Checked,
         AutoInstallUpdates = autoInstall.Checked,
     };

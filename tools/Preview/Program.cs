@@ -27,7 +27,7 @@ internal static class Program
         {
             var settings = new AppSettings { UiLanguage = language }.Normalize();
             using var icon = AppIcon.Load();
-            using var form = new SettingsForm(settings, new UiText(language), icon, null, _ => [], () => Task.CompletedTask);
+            using var form = new SettingsForm(settings, new UiText(language), icon, null, _ => [], () => Task.CompletedTask, _ => { });
             form.Show();
             Application.DoEvents();
             using var bitmap = new Bitmap(form.Width, form.Height);
