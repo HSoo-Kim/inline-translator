@@ -193,7 +193,8 @@ internal sealed class TrayApp : ApplicationContext
             var mouse = Cursor.Position;
             Rectangle? selection = settings.BubblePosition == "selection" && mode == CaptureMode.Selection ? SelectionLocator.Find(window) : null;
             var near = selection ?? new Rectangle(mouse.X + 12, mouse.Y, 1, 12);
-            indicator.ShowNear(new Point(near.Left, near.Bottom), text.T("Translating to {0}…", target.NativeName));
+            var heading = Direction.Resolve(copied, target, Languages.Home(settings.HomeLanguage)) ?? target;
+            indicator.ShowNear(new Point(near.Left, near.Bottom), text.T("Translating to {0}…", heading.NativeName));
             var result = await translator.TranslateAsync(settings, target, copied, CancellationToken.None);
             indicator.Hide();
             if (result.PrimaryError is { } primaryError)
@@ -204,11 +205,13 @@ internal sealed class TrayApp : ApplicationContext
                         EngineCli.ProductName(settings.Primary.Provider), EngineCli.ProductName(result.Engine.Provider)));
             }
 
+            void ShowBubble() => bubble.ShowAt(near, $"→ {(result.Output ?? target).NativeName} · {result.Engine.DisplayName}", result.Text,
+                text.T("Read-only text · press any key or click to close"), settings.BubbleTheme == "dark",
+                followMouse: settings.BubblePosition == "mouse");
+
             if (readOnly)
             {
-                bubble.ShowAt(near, $"{target.NativeName} · {result.Engine.DisplayName}", result.Text,
-                    text.T("Read-only text · press any key or click to close"), settings.BubbleTheme == "dark",
-                    followMouse: settings.BubblePosition == "mouse");
+                ShowBubble();
                 return;
             }
 
@@ -223,6 +226,10 @@ internal sealed class TrayApp : ApplicationContext
             if (mode == CaptureMode.WholeInput) Keyboard.Chord(Native.VkControl, Native.VkA);
             Keyboard.Chord(Native.VkControl, Native.VkV);
             await Task.Delay(PasteSettle);
+            // Many apps do not report read-only text. If the original selection is still selected after
+            // pasting, the paste was ignored, so show the translation instead.
+            if (mode == CaptureMode.Selection && Capture.PasteWasIgnored(copied, await CopyAsync(selectAll: false, SelectionProbe)))
+                ShowBubble();
         }
         catch (TranslationFailedException failure)
         {

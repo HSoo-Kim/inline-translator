@@ -41,6 +41,7 @@ public sealed record AppSettings
     public EngineChoice Fallback { get; init; } = new(Provider.Codex, DefaultCodexModel);
     public IReadOnlyList<HotkeyPreset> Presets { get; init; } = DefaultPresets;
     public string Tone { get; init; } = "natural";
+    public string HomeLanguage { get; init; } = "";
     public IReadOnlyList<string> WholeInputApps { get; init; } = DefaultWholeInputApps;
     public string BubbleTheme { get; init; } = "light";
     public string BubblePosition { get; init; } = "mouse";
@@ -90,6 +91,7 @@ public sealed record AppSettings
             Fallback = fallback,
             Presets = presets,
             Tone = Tones.Contains(Tone) ? Tone : "natural",
+            HomeLanguage = Languages.Find(HomeLanguage)?.Code ?? "",
             BubbleTheme = BubbleThemes.Contains(BubbleTheme) ? BubbleTheme : "light",
             BubblePosition = BubblePositions.Contains(BubblePosition) ? BubblePosition : "mouse",
             WholeInputApps = apps,

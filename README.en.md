@@ -33,6 +33,7 @@ Now it is **one hotkey, right where you are typing**. In a few seconds your text
 - **Pick apps, don't type them** — choose the chat apps for whole-message translation from the apps installed on your PC. Add a document editor by mistake and it still won't replace a whole document.
 - **19 languages** — English, Korean, Japanese, Chinese (Simplified and Traditional), Spanish, French, German, Portuguese, Italian, Russian, Vietnamese, Thai, Indonesian, Arabic, Hindi, Turkish, Dutch and Polish. The source language is detected automatically.
 - **Three hotkeys** — for example `Ctrl+Alt+T` for English and `Ctrl+Alt+J` for Japanese.
+- **Two-way** — text in your language goes to the hotkey's language; text in any other language comes to your language. One hotkey turns Korean into English and English (or Japanese, …) into Korean. Set "My language" in Settings.
 - **Tone** — match the original, casual, or polite.
 - **Read-only text pops up** — select text you cannot edit (a received message, a web page, a PDF) and press the hotkey: the translation appears in a small bubble that disappears on any key or click. Choose black-on-white or white-on-black, and whether it follows the mouse (default) or stays right above/below the selection.
 - **Safe by default** — if you switch windows while it is translating, the result goes to the clipboard instead of being pasted. Your previous clipboard is restored.

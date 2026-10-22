@@ -178,7 +178,7 @@ public static class EngineCli
         "--config", "model_reasoning_effort=low", "--output-last-message", outputFile, "-",
     ];
 
-    public static string CodexInput(string instructions, string text) => instructions + "\n\nMessage:\n" + text;
+    public static string CodexInput(string instructions, string text) => instructions + "\n\n" + text;
 
     public static async Task<string> TranslateAsync(EngineChoice engine, string instructions, string text, CancellationToken token)
     {

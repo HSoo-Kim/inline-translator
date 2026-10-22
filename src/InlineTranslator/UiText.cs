@@ -132,5 +132,10 @@ public sealed class UiText
         ["Bubble position"] = ("말풍선 위치", "气泡位置", "吹き出しの位置"),
         ["Follows the mouse"] = ("마우스를 따라다님", "跟随鼠标", "マウスに追従"),
         ["Right above or below the selected text"] = ("선택한 글 바로 위·아래", "选中文本的正上方或正下方", "選択したテキストのすぐ上・下"),
+        ["My language"] = ("내 언어", "我的语言", "自分の言語"),
+        ["Text in your language goes to the hotkey's language; text in any other language comes to your language. For example, Korean becomes English and English becomes Korean."] =
+            ("내 언어로 쓴 글은 단축키 언어로, 그 밖의 언어는 내 언어로 번역합니다. 예: 한국어는 영어로, 영어는 한국어로.",
+             "我的语言写的文本译成快捷键的语言，其他语言的文本译成我的语言。例如：中文译成英文，英文译成中文。",
+             "自分の言語の文章はショートカットの言語に、それ以外の言語は自分の言語に翻訳します。例：日本語は英語に、英語は日本語に。"),
     };
 }

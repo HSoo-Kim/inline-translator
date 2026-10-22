@@ -14,6 +14,7 @@ internal sealed class SettingsForm : Form
     private readonly EngineRow primary, fallback;
     private readonly List<(ToggleSwitch Enabled, HotkeyBox Hotkey, PillDropdown Language)> presets = [];
     private readonly PillDropdown tone = new(190);
+    private readonly PillDropdown homeLanguage = new(250);
     private readonly PillDropdown uiLanguage = new(160);
     private readonly PillDropdown bubbleTheme = new(260);
     private readonly PillDropdown bubblePosition = new(260);
@@ -129,6 +130,14 @@ internal sealed class SettingsForm : Form
         tone.SetOptions(new (object, string)[] { ("natural", text.T("Match the original")), ("casual", text.T("Casual")), ("formal", text.T("Polite")) });
         toneRow.Controls.AddRange([Ui.Text(text.T("Tone"), Ui.Muted), tone]);
         hotkeyCard.Controls.Add(toneRow);
+        var homeRow = new FlowRow { Margin = new Padding(0, 4, 0, 0) };
+        homeLanguage.SetOptions(new (object, string)[] { ("", text.T("System default") + " · " + Languages.FromCulture(System.Globalization.CultureInfo.CurrentUICulture).NativeName) }
+            .Concat(Languages.All.Select(item => ((object)item.Code, item.ToString()))));
+        homeRow.Controls.AddRange([Ui.Text(text.T("My language"), Ui.Muted), homeLanguage]);
+        hotkeyCard.Controls.Add(homeRow);
+        var homeNote = Ui.Text(text.T("Text in your language goes to the hotkey's language; text in any other language comes to your language. For example, Korean becomes English and English becomes Korean."), Ui.Muted, Ui.Regular(8.5f), ContentWidth - 40);
+        homeNote.Margin = new Padding(0, 2, 0, 0);
+        hotkeyCard.Controls.Add(homeNote);
         page.Controls.Add(hotkeyCard.Panel);
 
         var appsCard = Card(text.T("Apps that translate the whole input box"),
@@ -291,6 +300,7 @@ internal sealed class SettingsForm : Form
             presets[i].Hotkey.ForeColor = preset.Enabled ? Ui.Ink : Ui.Gray;
         }
         tone.Select(settings.Tone);
+        homeLanguage.Select(settings.HomeLanguage);
         bubbleTheme.Select(settings.BubbleTheme);
         bubblePosition.Select(settings.BubblePosition);
         uiLanguage.Select(settings.UiLanguage);
@@ -341,6 +351,7 @@ internal sealed class SettingsForm : Form
         Presets = presets.Select(row => new HotkeyPreset(row.Enabled.Checked, row.Hotkey.GetHotkey()?.ToString() ?? "",
             row.Language.SelectedValue as string ?? "en")).ToArray(),
         Tone = tone.SelectedValue as string ?? "natural",
+        HomeLanguage = homeLanguage.SelectedValue as string ?? "",
         BubbleTheme = bubbleTheme.SelectedValue as string ?? "light",
         BubblePosition = bubblePosition.SelectedValue as string ?? "mouse",
         WholeInputApps = wholeInputApps.ToArray(),

@@ -31,6 +31,7 @@ internal static class Program
             ("sign-in status parsing and sign-in error detection", SignInStatus),
             ("app catalog keeps real apps and merges running ones", AppCatalogMerge),
             ("bubble sits right under the selection, or above it near the screen bottom", BubblePlacement),
+            ("my language goes out, everything else comes home", TwoWayDirection),
             ("Codex errors expose only the ERROR message", CodexErrors),
             ("process runner passes stdin and returns exit codes", ProcessRoundtrip),
             ("process runner kills the CLI on timeout", ProcessTimeout),
@@ -98,6 +99,7 @@ internal static class Program
         Check(settings.CheckForUpdates && settings.AutoInstallUpdates, "updates on by default");
         Equal("mouse", settings.BubblePosition);
         Equal("light", settings.BubbleTheme);
+        Equal("", settings.HomeLanguage);
     }
 
     private static void NormalizeRepairs()
@@ -117,6 +119,7 @@ internal static class Program
             Tone = "angry",
             BubbleTheme = "neon",
             BubblePosition = "orbit",
+            HomeLanguage = "xx",
             WholeInputApps = ["Telegram.exe", "telegram", " Slack ", "bad|name", ""],
         }.Normalize();
 
@@ -155,6 +158,7 @@ internal static class Program
             Tone = "formal",
             BubbleTheme = "dark",
             BubblePosition = "selection",
+            HomeLanguage = "ja",
             CheckForUpdates = false,
         }.Normalize();
         SettingsStore.Save(path, settings);
@@ -166,6 +170,7 @@ internal static class Program
         Equal("formal", loaded.Tone);
         Equal("dark", loaded.BubbleTheme);
         Equal("selection", loaded.BubblePosition);
+        Equal("ja", loaded.HomeLanguage);
         Check(!loaded.CheckForUpdates, "booleans survive");
         Equal(1, Directory.GetFiles(Path.GetDirectoryName(path)!).Length);
         Check(File.ReadAllText(path).Contains("\"Codex\""), "providers are stored as names");
@@ -194,9 +199,20 @@ internal static class Program
             {
                 string prompt = Prompt.Instructions(language, tone);
                 Check(prompt.Contains("into " + language.EnglishName + ".", StringComparison.Ordinal), "target named: " + language.Code);
+                var withHome = Prompt.Instructions(language, tone, Languages.Find(language.Code == "ko" ? "en" : "ko"));
+                Check(withHome.IndexOfAny(['"', '&', '|', '<', '>', '^', '%', '\n']) < 0, "two-way shell-safe: " + language.Code);
                 Check(prompt.IndexOfAny(['"', '&', '|', '<', '>', '^', '%', '\n']) < 0, "shell-safe: " + language.Code);
             }
         Check(Prompt.Instructions(Languages.All[0], "casual").Contains("casual", StringComparison.Ordinal), "casual tone");
+        var twoWay = Prompt.Instructions(Languages.Find("en")!, "natural", Languages.Find("ko"));
+        Check(twoWay.Contains("If it is Korean, translate it into English.", StringComparison.Ordinal), "my language goes to the hotkey language");
+        Check(twoWay.Contains("such as English or Japanese, translate it into Korean.", StringComparison.Ordinal), "everything else comes to my language");
+        Check(Prompt.Instructions(Languages.Find("en")!, "natural", Languages.Find("en")).Contains("return it unchanged", StringComparison.Ordinal), "same home and target keeps text");
+        Check(twoWay.IndexOfAny(['"', '&', '|', '<', '>', '^', '%', '\n']) < 0, "two-way prompt stays shell-safe");
+        Equal("ko", Languages.FromCulture(CultureInfo.GetCultureInfo("ko-KR")).Code);
+        Equal("zh-TW", Languages.FromCulture(CultureInfo.GetCultureInfo("zh-TW")).Code);
+        Equal("zh-CN", Languages.FromCulture(CultureInfo.GetCultureInfo("zh-CN")).Code);
+        Equal("en", Languages.FromCulture(CultureInfo.GetCultureInfo("sw-KE")).Code);
         Check(Prompt.Instructions(Languages.All[0], "formal").Contains("formal", StringComparison.Ordinal), "formal tone");
         Equal(Languages.All.Count, Languages.All.Select(language => language.Code).Distinct().Count());
         Check(Languages.Find("ZH-cn")?.Code == "zh-CN" && Languages.Find("xx") is null, "language lookup");
@@ -217,12 +233,17 @@ internal static class Program
         Check(Capture.LooksLikeWholeDocument(string.Join("\n", Enumerable.Repeat("line", Capture.WholeInputMaxLines + 1))), "many lines is a document");
         Check(!Capture.LooksLikeWholeDocument(string.Join("\n", Enumerable.Repeat("line", Capture.WholeInputMaxLines))), "line limit is inclusive");
         Check(AppCatalog.IsKnownChatApp("telegram.exe") && !AppCatalog.IsKnownChatApp("WINWORD"), "known chat apps");
+
+        Check(Capture.PasteWasIgnored("안녕하세요\r\n반가워요", "안녕하세요\n반가워요 "), "same selection after paste means read-only");
+        Check(!Capture.PasteWasIgnored("안녕하세요", null), "nothing selected after paste means it worked");
+        Check(!Capture.PasteWasIgnored("안녕하세요", "Hello"), "different text means the paste replaced it");
+        Check(!Capture.PasteWasIgnored("안녕하세요", ""), "empty copy means nothing is selected");
     }
 
     private static void TranslatorFallback()
     {
         var calls = new List<string>();
-        var settings = new AppSettings().Normalize();
+        var settings = new AppSettings { HomeLanguage = "ko" }.Normalize();
         var english = Languages.Find("en")!;
         var ok = new Translator((engine, _, text, _) =>
         {
@@ -232,7 +253,7 @@ internal static class Program
         Equal("Hello", ok.Text);
         Equal(Provider.Claude, ok.Engine.Provider);
         Check(ok.PrimaryError is null, "no primary error");
-        Equal("Claude:안녕", string.Join(";", calls));
+        Equal("Claude:Translate this message into English.\nBEGIN MESSAGE\n안녕\nEND MESSAGE", string.Join(";", calls));
 
         calls.Clear();
         var fallback = new Translator((engine, instructions, text, _) =>
@@ -286,7 +307,8 @@ internal static class Program
         Check(codex.Contains("--ephemeral") && codex.Contains("--ignore-user-config"), "codex keeps no session and ignores user hooks");
         Equal("read-only", codex[codex.ToList().IndexOf("--sandbox") + 1]);
         Equal("-", codex[^1]);
-        Check(EngineCli.CodexInput("Do it.", "안녕").EndsWith("Message:\n안녕", StringComparison.Ordinal), "message appended after instructions");
+        Check(EngineCli.CodexInput("Do it.", "안녕").EndsWith("\n\n안녕", StringComparison.Ordinal), "message appended after instructions");
+        Equal("Hello\nthere", Translator.Unwrap("BEGIN MESSAGE\r\nHello\nthere\nEND MESSAGE\n"));
     }
 
     private static void CodexModels()
@@ -359,6 +381,25 @@ internal static class Program
         Check(merged.Take(2).All(app => app.Running), "running apps first");
     }
 
+    private static void TwoWayDirection()
+    {
+        var en = Languages.Find("en")!; var ko = Languages.Find("ko")!; var ja = Languages.Find("ja")!; var es = Languages.Find("es")!;
+        Equal(en, Direction.Resolve("내일 전까지 첨부한 슬라이드 검토 부탁드려요.", en, ko));
+        Equal(ko, Direction.Resolve("Please review the attached slides.", en, ko));
+        Equal(ko, Direction.Resolve("明日までに添付のスライドを確認してください。", en, ko));
+        Equal(ko, Direction.Resolve("Por favor revisa las diapositivas.", en, ko));
+        Equal(en, Direction.Resolve("Thanks for today! 내일 회의 자료는 오후 3시까지 보내드릴게요.", en, ko));
+        Equal(ko, Direction.Resolve("请明天之前查看幻灯片。", en, ko));
+        Equal(en, Direction.Resolve("明日までに確認", en, ja));
+        Equal(ja, Direction.Resolve("请明天之前查看幻灯片。", en, ja));
+        Equal(en, Direction.Resolve("안녕하세요", es, en));
+        Check(Direction.Resolve("Hola, ¿cómo estás?", es, en) is null, "Latin text with a Latin home language is left to the model");
+        Equal(en, Direction.Resolve("12345 !!!", en, ko));
+        Equal(ko, Direction.Resolve("Hi", ko, ko));
+        Equal(Script.Kana, Direction.Dominant("東京駅で待ち合わせしましょう"));
+        Equal(Script.Han, Direction.Dominant("东京站见面"));
+    }
+
     private static void BubblePlacement()
     {
         var union = BubbleLayout.Union([new System.Drawing.RectangleF(100, 200, 300, 20), new System.Drawing.RectangleF(80, 222, 120, 20)]);
@@ -417,7 +458,7 @@ internal static class Program
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://github.com/a","assets":[{"name":"inline-translator-win-x64.zip","browser_download_url":"https://github.com/x"}]}""")!.PackageUrl is null, "no digest means no automatic install");
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://evil.example/"}""") is null, "non-GitHub page rejected");
         Check(Parse("""{"tag_name":"latest","html_url":"https://github.com/a"}""") is null, "non-version tag rejected");
-        Equal(new Version(0, 1, 6), UpdateChecker.Current);
+        Equal(new Version(0, 1, 7), UpdateChecker.Current);
     }
 
     private static void UpdateInstall()

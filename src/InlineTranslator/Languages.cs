@@ -30,6 +30,13 @@ public static class Languages
         new("pl", "Polish", "Polski"),
     ];
 
+    public static TargetLanguage FromCulture(System.Globalization.CultureInfo culture) =>
+        Find(culture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
+            ? culture.Name.Contains("TW") || culture.Name.Contains("HK") || culture.Name.Contains("Hant") ? "zh-TW" : "zh-CN"
+            : culture.TwoLetterISOLanguageName) ?? All[0];
+
+    public static TargetLanguage Home(string code) => Find(code) ?? FromCulture(System.Globalization.CultureInfo.CurrentUICulture);
+
     public static TargetLanguage? Find(string? code) =>
         All.FirstOrDefault(language => language.Code.Equals(code, StringComparison.OrdinalIgnoreCase));
 }

@@ -109,6 +109,9 @@ internal static class Program
     {
         var engine = new EngineChoice(Enum.Parse<Provider>(provider), model);
         var settings = new AppSettings { Primary = engine, Fallback = new EngineChoice(Provider.None, "") }.Normalize();
+        var home = Languages.Home(settings.HomeLanguage);
+        var target0 = Languages.Find(language) ?? Languages.All[0];
+        Console.WriteLine($"culture={System.Globalization.CultureInfo.CurrentUICulture.Name} home={home.Code} target={target0.Code} script={Direction.Dominant(message)} output={Direction.Resolve(message, target0, home)?.Code ?? "model decides"}");
         var target = Languages.Find(language) ?? throw new ArgumentException("Unknown language " + language);
         var clock = Stopwatch.StartNew();
         try
