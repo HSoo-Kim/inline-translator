@@ -16,6 +16,7 @@ internal sealed class SettingsForm : Form
     private readonly PillDropdown tone = new(190);
     private readonly PillDropdown uiLanguage = new(160);
     private readonly PillDropdown bubbleTheme = new(260);
+    private readonly PillDropdown bubblePosition = new(260);
     private readonly FlowLayoutPanel appChips = new()
     {
         AutoSize = true,
@@ -140,6 +141,12 @@ internal sealed class SettingsForm : Form
         bubbleTheme.SetOptions(new (object, string)[] { ("light", text.T("White background, black text")), ("dark", text.T("Black background, white text")) });
         bubbleRow.Controls.AddRange([Ui.Text(text.T("Read-only translation bubble"), Ui.Ink), bubbleTheme]);
         generalCard.Controls.Add(bubbleRow);
+        var positionRow = new FlowRow { Margin = new Padding(0, 0, 0, 6) };
+        bubblePosition.SetOptions(new (object, string)[] { ("mouse", text.T("Follows the mouse")), ("selection", text.T("Right above or below the selected text")) });
+        var positionLabel = Ui.Text(text.T("Bubble position"), Ui.Ink);
+        positionLabel.MinimumSize = new Size(bubbleRow.Controls[0].GetPreferredSize(Size.Empty).Width, 0);
+        positionRow.Controls.AddRange([positionLabel, bubblePosition]);
+        generalCard.Controls.Add(positionRow);
         generalCard.Controls.Add(startWithWindows);
         generalCard.Controls.Add(checkForUpdates);
         generalCard.Controls.Add(autoInstall);
@@ -285,6 +292,7 @@ internal sealed class SettingsForm : Form
         }
         tone.Select(settings.Tone);
         bubbleTheme.Select(settings.BubbleTheme);
+        bubblePosition.Select(settings.BubblePosition);
         uiLanguage.Select(settings.UiLanguage);
         wholeInputApps.AddRange(settings.WholeInputApps);
         ShowApps();
@@ -334,6 +342,7 @@ internal sealed class SettingsForm : Form
             row.Language.SelectedValue as string ?? "en")).ToArray(),
         Tone = tone.SelectedValue as string ?? "natural",
         BubbleTheme = bubbleTheme.SelectedValue as string ?? "light",
+        BubblePosition = bubblePosition.SelectedValue as string ?? "mouse",
         WholeInputApps = wholeInputApps.ToArray(),
         UiLanguage = uiLanguage.SelectedValue as string ?? "",
         CheckForUpdates = checkForUpdates.Checked,

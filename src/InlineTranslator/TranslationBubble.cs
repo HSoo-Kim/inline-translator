@@ -169,9 +169,10 @@ internal sealed class TranslationBubble : Form
     private readonly Label header = new() { AutoSize = true, ForeColor = Ui.Muted, Font = Ui.Regular(8.5f), Margin = new Padding(0, 0, 0, 4), BackColor = Color.Transparent };
     private readonly Label body = new() { AutoSize = true, ForeColor = Ui.Ink, Font = Ui.Regular(11f), MaximumSize = new Size(440, 0), Margin = Padding.Empty, BackColor = Color.Transparent };
     private readonly Label hint = new() { AutoSize = true, ForeColor = Ui.Gray, Font = Ui.Regular(8f), Margin = new Padding(0, 8, 0, 0), BackColor = Color.Transparent };
-    private readonly System.Windows.Forms.Timer watcher = new() { Interval = 30 };
+    private readonly System.Windows.Forms.Timer watcher = new() { Interval = 15 };
     private readonly bool[] held = new bool[256];
     private Color border = Ui.Line;
+    private bool followMouse;
 
     public TranslationBubble()
     {
@@ -193,7 +194,11 @@ internal sealed class TranslationBubble : Form
         };
         stack.Controls.AddRange([header, body, hint]);
         Controls.Add(stack);
-        watcher.Tick += (_, _) => CloseOnInput();
+        watcher.Tick += (_, _) =>
+        {
+            CloseOnInput();
+            if (Visible && followMouse) MoveToMouse();
+        };
         Disposed += (_, _) => watcher.Dispose();
     }
 
@@ -223,8 +228,9 @@ internal sealed class TranslationBubble : Form
         e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
     }
 
-    public void ShowAt(Rectangle target, string title, string text, string closeHint, bool dark)
+    public void ShowAt(Rectangle target, string title, string text, string closeHint, bool dark, bool followMouse = false)
     {
+        this.followMouse = followMouse;
         border = dark ? Color.FromArgb(55, 55, 60) : Ui.Line;
         BackColor = Controls[0].BackColor = dark ? Color.FromArgb(24, 24, 27) : Color.White;
         body.ForeColor = dark ? Color.White : Color.FromArgb(17, 17, 17);
@@ -240,6 +246,13 @@ internal sealed class TranslationBubble : Form
         watcher.Start();
     }
 
+
+    private void MoveToMouse()
+    {
+        var mouse = Cursor.Position;
+        var next = BubbleLayout.Placement(new Rectangle(mouse.X + 12, mouse.Y, 1, 12), Size, Screen.FromPoint(mouse).WorkingArea, 8);
+        if (next != Location) Location = next;
+    }
 
     private void CloseOnInput()
     {

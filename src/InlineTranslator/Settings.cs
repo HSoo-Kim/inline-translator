@@ -22,6 +22,7 @@ public sealed record AppSettings
     public static readonly string[] UiLanguages = ["ko", "en", "zh-CN", "ja"];
     public static readonly string[] Tones = ["natural", "casual", "formal"];
     public static readonly string[] BubbleThemes = ["light", "dark"];
+    public static readonly string[] BubblePositions = ["mouse", "selection"];
     public const string DefaultClaudeModel = "claude-haiku-5-5";
     public const string DefaultCodexModel = "gpt-5.6-luna";
 
@@ -42,6 +43,7 @@ public sealed record AppSettings
     public string Tone { get; init; } = "natural";
     public IReadOnlyList<string> WholeInputApps { get; init; } = DefaultWholeInputApps;
     public string BubbleTheme { get; init; } = "light";
+    public string BubblePosition { get; init; } = "mouse";
     public bool CheckForUpdates { get; init; } = true;
     public bool AutoInstallUpdates { get; init; } = true;
 
@@ -89,6 +91,7 @@ public sealed record AppSettings
             Presets = presets,
             Tone = Tones.Contains(Tone) ? Tone : "natural",
             BubbleTheme = BubbleThemes.Contains(BubbleTheme) ? BubbleTheme : "light",
+            BubblePosition = BubblePositions.Contains(BubblePosition) ? BubblePosition : "mouse",
             WholeInputApps = apps,
         };
     }

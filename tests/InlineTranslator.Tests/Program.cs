@@ -96,6 +96,8 @@ internal static class Program
         Equal(new EngineChoice(Provider.Codex, "gpt-5.6-luna"), settings.Fallback);
         Check(settings.WholeInputApps.Contains("Telegram"), "Telegram translates the whole input");
         Check(settings.CheckForUpdates && settings.AutoInstallUpdates, "updates on by default");
+        Equal("mouse", settings.BubblePosition);
+        Equal("light", settings.BubbleTheme);
     }
 
     private static void NormalizeRepairs()
@@ -114,6 +116,7 @@ internal static class Program
             ],
             Tone = "angry",
             BubbleTheme = "neon",
+            BubblePosition = "orbit",
             WholeInputApps = ["Telegram.exe", "telegram", " Slack ", "bad|name", ""],
         }.Normalize();
 
@@ -126,6 +129,7 @@ internal static class Program
         Equal(new HotkeyPreset(false, "", "en"), settings.Presets[2]);
         Equal("natural", settings.Tone);
         Equal("light", settings.BubbleTheme);
+        Equal("mouse", settings.BubblePosition);
         Equal("Telegram,Slack", string.Join(",", settings.WholeInputApps));
 
         var models = new AppSettings
@@ -150,6 +154,7 @@ internal static class Program
             WholeInputApps = ["카카오톡", "Telegram"],
             Tone = "formal",
             BubbleTheme = "dark",
+            BubblePosition = "selection",
             CheckForUpdates = false,
         }.Normalize();
         SettingsStore.Save(path, settings);
@@ -160,6 +165,7 @@ internal static class Program
         Check(settings.WholeInputApps.SequenceEqual(loaded.WholeInputApps), "Unicode app names survive");
         Equal("formal", loaded.Tone);
         Equal("dark", loaded.BubbleTheme);
+        Equal("selection", loaded.BubblePosition);
         Check(!loaded.CheckForUpdates, "booleans survive");
         Equal(1, Directory.GetFiles(Path.GetDirectoryName(path)!).Length);
         Check(File.ReadAllText(path).Contains("\"Codex\""), "providers are stored as names");
@@ -411,7 +417,7 @@ internal static class Program
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://github.com/a","assets":[{"name":"inline-translator-win-x64.zip","browser_download_url":"https://github.com/x"}]}""")!.PackageUrl is null, "no digest means no automatic install");
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://evil.example/"}""") is null, "non-GitHub page rejected");
         Check(Parse("""{"tag_name":"latest","html_url":"https://github.com/a"}""") is null, "non-version tag rejected");
-        Equal(new Version(0, 1, 5), UpdateChecker.Current);
+        Equal(new Version(0, 1, 6), UpdateChecker.Current);
     }
 
     private static void UpdateInstall()

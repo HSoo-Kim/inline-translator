@@ -190,9 +190,10 @@ internal sealed class TrayApp : ApplicationContext
             }
 
             bool readOnly = mode == CaptureMode.Selection && FocusInspector.IsReadOnly(window);
-            Rectangle? selection = mode == CaptureMode.Selection ? SelectionLocator.Find(window) : null;
-            var anchor = ForegroundWindow.CaretOrCursor(window);
-            indicator.ShowNear(selection is { } box ? new Point(box.Left, box.Bottom) : anchor, text.T("Translating to {0}…", target.NativeName));
+            var mouse = Cursor.Position;
+            Rectangle? selection = settings.BubblePosition == "selection" && mode == CaptureMode.Selection ? SelectionLocator.Find(window) : null;
+            var near = selection ?? new Rectangle(mouse.X + 12, mouse.Y, 1, 12);
+            indicator.ShowNear(new Point(near.Left, near.Bottom), text.T("Translating to {0}…", target.NativeName));
             var result = await translator.TranslateAsync(settings, target, copied, CancellationToken.None);
             indicator.Hide();
             if (result.PrimaryError is { } primaryError)
@@ -205,8 +206,9 @@ internal sealed class TrayApp : ApplicationContext
 
             if (readOnly)
             {
-                bubble.ShowAt(selection ?? new Rectangle(anchor.X, anchor.Y - 18, 1, 20), $"{target.NativeName} · {result.Engine.DisplayName}", result.Text,
-                    text.T("Read-only text · press any key or click to close"), settings.BubbleTheme == "dark");
+                bubble.ShowAt(near, $"{target.NativeName} · {result.Engine.DisplayName}", result.Text,
+                    text.T("Read-only text · press any key or click to close"), settings.BubbleTheme == "dark",
+                    followMouse: settings.BubblePosition == "mouse");
                 return;
             }
 

@@ -129,5 +129,8 @@ public sealed class UiText
         ["Read-only translation bubble"] = ("읽기 전용 번역 말풍선", "只读文本翻译气泡", "読み取り専用の翻訳吹き出し"),
         ["White background, black text"] = ("흰 배경 + 검정 글자", "白底黑字", "白い背景 + 黒い文字"),
         ["Black background, white text"] = ("검정 배경 + 흰 글자", "黑底白字", "黒い背景 + 白い文字"),
+        ["Bubble position"] = ("말풍선 위치", "气泡位置", "吹き出しの位置"),
+        ["Follows the mouse"] = ("마우스를 따라다님", "跟随鼠标", "マウスに追従"),
+        ["Right above or below the selected text"] = ("선택한 글 바로 위·아래", "选中文本的正上方或正下方", "選択したテキストのすぐ上・下"),
     };
 }
