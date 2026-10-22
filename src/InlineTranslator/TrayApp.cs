@@ -14,6 +14,7 @@ internal sealed class TrayApp : ApplicationContext
     private readonly NotifyIcon tray;
     private readonly HotkeyWindow hotkeys;
     private readonly BusyIndicator indicator = new();
+    private readonly TranslationBubble bubble = new();
     private readonly Translator translator = new(EngineCli.TranslateAsync);
     private readonly System.Windows.Forms.Timer updateTimer = new() { Interval = (int)TimeSpan.FromHours(24).TotalMilliseconds };
     private readonly ToolStripMenuItem updateItem = new() { Visible = false };
@@ -188,6 +189,7 @@ internal sealed class TrayApp : ApplicationContext
                 return;
             }
 
+            bool readOnly = mode == CaptureMode.Selection && FocusInspector.IsReadOnly(window);
             indicator.ShowNear(ForegroundWindow.CaretOrCursor(window), text.T("Translating to {0}…", target.NativeName));
             var result = await translator.TranslateAsync(settings, target, copied, CancellationToken.None);
             indicator.Hide();
@@ -197,6 +199,13 @@ internal sealed class TrayApp : ApplicationContext
                 if (EngineCli.IsSignInError(primaryError) && signInReminded.Add(settings.Primary.Provider))
                     NotifySignIn(settings.Primary.Provider, text.T("{0} needs you to sign in again, so {1} translated this. Click here to sign in to {0}.",
                         EngineCli.ProductName(settings.Primary.Provider), EngineCli.ProductName(result.Engine.Provider)));
+            }
+
+            if (readOnly)
+            {
+                bubble.ShowNear(Cursor.Position, $"{target.NativeName} · {result.Engine.DisplayName}", result.Text,
+                    text.T("Read-only text · press any key or click to close"));
+                return;
             }
 
             restoreClipboard = true;
@@ -343,6 +352,7 @@ internal sealed class TrayApp : ApplicationContext
         tray.Visible = false;
         tray.Dispose();
         indicator.Dispose();
+        bubble.Dispose();
         icon.Dispose();
         base.ExitThreadCore();
     }

@@ -392,7 +392,7 @@ internal static class Program
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://github.com/a","assets":[{"name":"inline-translator-win-x64.zip","browser_download_url":"https://github.com/x"}]}""")!.PackageUrl is null, "no digest means no automatic install");
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://evil.example/"}""") is null, "non-GitHub page rejected");
         Check(Parse("""{"tag_name":"latest","html_url":"https://github.com/a"}""") is null, "non-version tag rejected");
-        Equal(new Version(0, 1, 3), UpdateChecker.Current);
+        Equal(new Version(0, 1, 4), UpdateChecker.Current);
     }
 
     private static void UpdateInstall()

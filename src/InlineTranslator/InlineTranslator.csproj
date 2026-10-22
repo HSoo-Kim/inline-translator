@@ -11,7 +11,7 @@
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
     <AssemblyName>InlineTranslator</AssemblyName>
     <RootNamespace>InlineTranslator</RootNamespace>
-    <Version>0.1.3</Version>
+    <Version>0.1.4</Version>
     <Product>Inline Translator</Product>
     <Description>Translate the text you are typing in place with a hotkey, using your own Claude Code or Codex subscription.</Description>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>

@@ -125,5 +125,6 @@ public sealed class UiText
         ["Chat app"] = ("메신저", "聊天应用", "チャットアプリ"),
         ["Could not read the input box in {0}. Drag-select the text, then press the hotkey."] = ("{0}에서 입력창 내용을 가져오지 못했습니다. 번역할 부분을 드래그로 선택한 뒤 단축키를 누르세요.", "无法读取 {0} 的输入框内容。请拖动选中要翻译的文本后再按快捷键。", "{0} の入力欄を読み取れませんでした。翻訳する部分をドラッグで選択してからショートカットを押してください。"),
         ["That looks like a whole document, not a chat message, so nothing was translated. Drag-select the part to translate, or remove {0} from the whole-input apps in Settings."] = ("채팅 메시지가 아니라 문서 전체가 잡힌 것 같아 번역하지 않았습니다. 번역할 부분을 드래그로 선택하거나, 설정의 입력창 전체 번역 앱에서 {0}을(를) 빼세요.", "选中的内容看起来是整篇文档而不是聊天消息，因此未翻译。请拖动选中要翻译的部分，或在设置中将 {0} 从整框翻译应用中移除。", "チャットのメッセージではなく文書全体が選択されたようなので翻訳しませんでした。翻訳する部分をドラッグで選択するか、設定の入力欄全体を翻訳するアプリから {0} を外してください。"),
+        ["Read-only text · press any key or click to close"] = ("읽기 전용 글 · 아무 키나 누르거나 클릭하면 닫힙니다", "只读文本 · 按任意键或点击即可关闭", "読み取り専用のテキスト · 何かキーを押すかクリックで閉じます"),
     };
 }

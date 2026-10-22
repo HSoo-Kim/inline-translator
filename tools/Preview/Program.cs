@@ -56,6 +56,31 @@ internal static class Program
             Console.WriteLine($"{path} {form.Width}x{form.Height}");
             form.Close();
         }
+        using (var bubble = new TranslationBubble())
+        {
+            bubble.ShowNear(new Point(200, 200), "English · Claude · Haiku 5.5",
+                "I'll send the meeting materials by 3 PM tomorrow.", new UiText("ko").T("Read-only text · press any key or click to close"));
+            Application.DoEvents();
+            using var bitmap = new Bitmap(bubble.Width, bubble.Height);
+            bubble.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bubble.Size));
+            string path = Path.Combine(folder, "..", "..", "artifacts", "bubble-ko.png");
+            bitmap.Save(path);
+            Console.WriteLine($"{path} {bubble.Width}x{bubble.Height}");
+        }
+        using (var form = new Form { Text = "focus check", Size = new Size(400, 200) })
+        {
+            var editable = new TextBox { Text = "editable", Location = new Point(10, 10), Width = 300 };
+            var locked = new TextBox { Text = "read only", ReadOnly = true, Location = new Point(10, 50), Width = 300 };
+            form.Controls.AddRange([editable, locked]);
+            form.Show();
+            Application.DoEvents();
+            editable.Focus();
+            Application.DoEvents();
+            Console.WriteLine($"focus editable -> readOnly={FocusInspector.IsReadOnly(form.Handle)}");
+            locked.Focus();
+            Application.DoEvents();
+            Console.WriteLine($"focus read-only -> readOnly={FocusInspector.IsReadOnly(form.Handle)}");
+        }
         using (var picker = new AppPicker(new UiText("ko"), ["Telegram", "KakaoTalk"]))
         {
             picker.Show();
