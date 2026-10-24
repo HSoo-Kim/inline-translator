@@ -279,6 +279,7 @@ internal sealed class PillDropdown : Control
     }
 
     public object? SelectedValue => selected >= 0 ? options[selected].Value : null;
+    public string SelectedLabel => selected >= 0 ? options[selected].Label : "";
     public int SelectedIndex => selected;
 
     public override Size GetPreferredSize(Size proposedSize)
@@ -286,7 +287,7 @@ internal sealed class PillDropdown : Control
         if (!WrapText) return base.GetPreferredSize(proposedSize);
         int width = proposedSize.Width > 0 ? proposedSize.Width : Width;
         int padding = Ui.Scale(this, 12), chevron = Ui.Scale(this, 10);
-        string label = selected >= 0 ? options[selected].Label : "";
+        string label = SelectedLabel;
         var measured = TextRenderer.MeasureText(label, Font,
             new Size(Math.Max(1, width - padding * 2 - chevron), int.MaxValue),
             TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
@@ -388,7 +389,7 @@ internal sealed class PillDropdown : Control
         Color border = !Enabled ? Ui.Line : open || Focused ? Ui.Accent : hovered ? Color.FromArgb(190, 198, 210) : Ui.Line;
         Ui.FillRounded(g, this, Enabled ? Color.White : Ui.Soft, border, 10);
         int pad = Ui.Scale(this, 12), chevron = Ui.Scale(this, 10);
-        string label = selected >= 0 ? options[selected].Label : "";
+        string label = SelectedLabel;
         var textBounds = new Rectangle(pad, 0, Width - pad * 2 - chevron, Height);
         TextRenderer.DrawText(g, label, Font, textBounds, Enabled ? ForeColor : Ui.Gray,
             TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix

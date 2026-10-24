@@ -75,6 +75,14 @@ internal static class SettingsQa
         Check(!form.HasValidationErrors && !form.HasChanges, "Restored hotkey clears validation.");
 
         form.SelectTab("engines");
+        foreach (var (name, engine) in new[] { ("primary-model", settings.Primary), ("fallback-model", settings.Fallback) })
+        {
+            var selected = Find<PillDropdown>(form, name);
+            string label = EngineCli.SuggestedModels(engine.Provider).Where(option => option.Id == engine.Model)
+                .Select(option => option.Label).DefaultIfEmpty(engine.Model).First();
+            Check((string?)selected.SelectedValue == engine.Model, "Model display cleanup must preserve the CLI model ID.");
+            Check(selected.SelectedLabel == label, "Model field must show its display name once, without an ID line.");
+        }
         var primary = Find<Button>(form, "primary-test");
         var primaryResult = Find<Label>(form, "primary-result");
         var fallbackResult = Find<Label>(form, "fallback-result");

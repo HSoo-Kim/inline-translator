@@ -734,7 +734,7 @@ internal sealed class SettingsForm : Form
             model.Enabled = choice != Provider.None;
             Test.Enabled = choice != Provider.None && !Running;
             model.SetOptions(EngineCli.SuggestedModels(choice).Select(option =>
-                ((object)option.Id, option.Label == option.Id ? option.Id : option.Label + "\n" + option.Id)));
+                ((object)option.Id, option.Label)));
             if (choice != Provider.None) model.Select(selected);
             else model.SelectIndex(-1);
             Changed?.Invoke();
