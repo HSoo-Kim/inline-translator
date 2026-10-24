@@ -19,6 +19,8 @@ Now it is **one hotkey, right where you are typing**. In a few seconds your text
 |---|---|
 | 💬 In a chat input box, **just press `Ctrl+Alt+T`** | The **whole message** you typed is translated |
 | 🖱️ **Drag to select, then press `Ctrl+Alt+T`** | **Only the selection** is translated (chat, email, documents, anywhere) |
+| **Select text, then press `Ctrl+Alt+R`** | Translate into **My language**, showing a bubble without changing the original |
+| **Press `Esc` while translating** | Cancel the current translation |
 
 - Two to four seconds later the translation replaces your text. Don't like it? `Ctrl+Z`.
 - Apps where no selection means the whole input box: Telegram, KakaoTalk, Slack, Discord, WhatsApp, LINE, Teams, Signal. Add or remove apps in Settings.
@@ -36,7 +38,9 @@ Now it is **one hotkey, right where you are typing**. In a few seconds your text
 - **Two-way** — text in your language goes to the hotkey's language; text in any other language comes to your language. One hotkey turns Korean into English and English (or Japanese, …) into Korean. Set "My language" in Settings.
 - **Tone** — match the original, casual, or polite.
 - **Read-only text pops up** — select text you cannot edit (a received message, a web page, a PDF) and press the hotkey: the translation appears in a small bubble that disappears on any key or click. Choose black-on-white or white-on-black, and whether it follows the mouse (default) or stays right above/below the selection.
-- **Safe by default** — if you switch windows while it is translating, the result goes to the clipboard instead of being pasted. Your previous clipboard is restored.
+- **Protect ongoing edits** — typing or clicking to move the cursor while translating prevents replacement; the result appears in a bubble instead. The selection is checked again before pasting. Whole-input translation never selects everything again and overwrites newly typed text.
+- **Reading shortcut** — `Ctrl+Alt+R` always translates selected text into "My language" and only shows a bubble, without guessing whether the app is editable or attempting to paste. Change or disable it in Settings.
+- **Esc to cancel** — while translating, `Esc` stops the running engine without starting the fallback or logging an error. After translation, Esc works normally in the foreground app again.
 - **Nothing recorded** — translated text is never written to disk or to Windows clipboard history (`Win+V`).
 - **One-click update** — when a new version is out, an `Update` button appears in the tray menu and Settings. Click it to download, replace and restart.
 - **Interface languages** — 한국어, English, 简体中文, 日本語. Switch at the top of Settings or from the tray menu.
@@ -61,6 +65,7 @@ Built for Windows 11 x64. The executable includes .NET, so nothing else to insta
 |---|---|
 | Translation engine | Main engine and the one to use if it fails. Pick a model from the list or type its name. |
 | Hotkeys and target languages | Click a hotkey box and press the combination you want. |
+| Read-only translation hotkey | Default `Ctrl+Alt+R`. Translate selected text into My language and display a bubble. |
 | Apps that translate the whole input box | In these apps the hotkey works without selecting. Default: Telegram, KakaoTalk, Slack, Discord, WhatsApp, LINE, Teams, Signal |
 | Display language | Language of the app itself; applies immediately. |
 | General | Start with Windows, update checks |
@@ -77,6 +82,7 @@ Built for Windows 11 x64. The executable includes .NET, so nothing else to insta
 ## Good to know
 
 - **PDF**: if an editing toolbar pops up when you drag-select, press `Esc` to close it, then press the hotkey to translate.
+- **Reading translation**: selection and copying vary between apps, so this feature may not always work smoothly. Prefer `Ctrl+Alt+R` for PDFs and web text because it never pastes. Image-only PDFs without copyable text are not supported.
 - Tested with Claude Code 2.1.300 and Codex CLI 0.153.2. Much older versions may lack some options.
 - Some apps (code editors, for example) copy the whole line when you press `Ctrl+C` with nothing selected. Select the text first there.
 - Windows does not allow pasting into windows running as administrator.

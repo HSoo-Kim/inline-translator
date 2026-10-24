@@ -50,6 +50,11 @@ public sealed class UiText
         ["Select the text to translate first, then press the hotkey."] =
             ("번역할 텍스트를 먼저 선택한 뒤 단축키를 누르세요.", "请先选择要翻译的文本，再按快捷键。", "翻訳するテキストを選択してからショートカットを押してください。"),
         ["Translating to {0}…"] = ("{0} 번역 중…", "正在翻译为{0}…", "{0}に翻訳中…"),
+        ["Translating to {0}… · Esc to cancel"] = ("{0} 번역 중… · Esc로 취소", "正在翻译为{0}… · 按 Esc 取消", "{0}に翻訳中… · Esc でキャンセル"),
+        ["Input changed · translation shown without replacing text"] =
+            ("입력 내용이 바뀌어 글을 바꾸지 않고 번역문만 표시합니다", "输入内容已更改 · 仅显示译文，不替换文本", "入力内容が変わりました · テキストを置き換えずに訳文を表示します"),
+        ["Translation · press any key or click to close"] =
+            ("번역 · 아무 키나 누르거나 클릭하면 닫힙니다", "译文 · 按任意键或点击即可关闭", "翻訳 · 何かキーを押すかクリックで閉じます"),
         ["You switched windows, so the translation was copied instead. Paste it with Ctrl+V."] =
             ("창이 바뀌어서 번역 결과를 클립보드에 복사해 두었습니다. Ctrl+V로 붙여 넣으세요.",
              "窗口已切换，翻译结果已复制到剪贴板。请按 Ctrl+V 粘贴。",
@@ -69,6 +74,11 @@ public sealed class UiText
              "直接使用此电脑上已登录的 Claude Code 或 Codex，无需 API 密钥。",
              "この PC でサインイン済みの Claude Code または Codex をそのまま使います。API キーは不要です。"),
         ["Hotkeys and target languages"] = ("단축키와 번역 언어", "快捷键与目标语言", "ショートカットと翻訳先の言語"),
+        ["Read-only translation hotkey"] = ("읽기 전용 번역 단축키", "只读翻译快捷键", "読み取り専用の翻訳ショートカット"),
+        ["Select text first. This hotkey always translates into My language and only shows a bubble, without pasting or replacing text."] =
+            ("선택한 글을 항상 내 언어로 번역합니다.\n원문은 바꾸지 않고 말풍선으로 표시합니다.",
+             "选中文字始终译成“我的语言”。\n仅显示气泡，不粘贴或修改原文。",
+             "選択した文章を常に「自分の言語」に翻訳。\n原文を変えず、吹き出しで表示します。"),
         ["Select text and press a hotkey: it is replaced with the translation in place."] =
             ("텍스트를 선택하고 단축키를 누르면 그 자리에서 번역문으로 바뀝니다.",
              "选择文本并按快捷键，文本会被原地替换为译文。",

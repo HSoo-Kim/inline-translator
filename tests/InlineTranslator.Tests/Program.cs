@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
+using System.IO.Pipes;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -11,8 +12,18 @@ internal static class Program
 {
     private static readonly string TestDirectory = Path.Combine(Path.GetTempPath(), $"InlineTranslator.Tests-{Guid.NewGuid():N}");
 
-    private static int Main()
+    private static int Main(string[] args)
     {
+        if (args is ["cancellation-child", var pipeName])
+        {
+            using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut);
+            client.Connect(10000);
+            using var writer = new StreamWriter(client, leaveOpen: true) { AutoFlush = true };
+            using var reader = new StreamReader(client);
+            writer.WriteLine(Environment.ProcessId);
+            reader.ReadLine();
+            return 0;
+        }
         var tests = new (string Name, Action Run)[]
         {
             ("hotkeys parse, normalize and format", HotkeyRoundtrip),
@@ -23,6 +34,9 @@ internal static class Program
             ("missing, corrupt and null settings files", SettingsEdgeFiles),
             ("prompts name the target and stay shell-safe for every language", Prompts),
             ("capture uses selection first and whole input only in listed apps", CaptureRules),
+            ("reading hotkey normalizes and persists without conflicting with presets", ReadingHotkey),
+            ("input protection rejects changed or missing selections and meaningful input", InputProtection),
+            ("cancellation stops primary and fallback without delivering a result", TranslationCancellation),
             ("translator uses primary, then fallback, and reports both failures", TranslatorFallback),
             ("translator treats empty output as failure and lets cancellation through", TranslatorEdgeCases),
             ("CLI arguments keep sessions unsaved and tools disabled", EngineArguments),
@@ -35,6 +49,7 @@ internal static class Program
             ("Codex errors expose only the ERROR message", CodexErrors),
             ("process runner passes stdin and returns exit codes", ProcessRoundtrip),
             ("process runner kills the CLI on timeout", ProcessTimeout),
+            ("process runner cancels a running CLI and waits for its exit", ProcessCancellation),
             ("release parsing accepts only verifiable GitHub packages", ReleaseParsing),
             ("update installer replaces the executable only after a SHA-256 match", UpdateInstall),
             ("every UI string is translated with matching placeholders", UiStrings),
@@ -100,6 +115,8 @@ internal static class Program
         Equal("mouse", settings.BubblePosition);
         Equal("light", settings.BubbleTheme);
         Equal("", settings.HomeLanguage);
+        Equal("Ctrl+Alt+R", settings.ReadingHotkey);
+        Check(settings.ReadingHotkeyEnabled, "reading shortcut enabled");
     }
 
     private static void NormalizeRepairs()
@@ -292,7 +309,97 @@ internal static class Program
             token.ThrowIfCancellationRequested();
             return Task.FromResult("x");
         }).TranslateAsync(new AppSettings().Normalize(), Languages.All[0], "x", new CancellationToken(true)).GetAwaiter().GetResult());
-        Equal(1, calls);
+        Equal(0, calls);
+    }
+
+    private static void ReadingHotkey()
+    {
+        var duplicate = new AppSettings { ReadingHotkey = "ctrl+alt+t" }.Normalize();
+        Check(!duplicate.ReadingHotkeyEnabled && duplicate.Presets[0].Enabled, "regular preset wins duplicate");
+        var invalid = new AppSettings { ReadingHotkey = "Esc" }.Normalize();
+        Check(!invalid.ReadingHotkeyEnabled && invalid.ReadingHotkey == "", "bare Esc cannot be a reading shortcut");
+        var disabledPreset = new AppSettings { ReadingHotkey = "ctrl+alt+j" }.Normalize();
+        Check(disabledPreset.ReadingHotkeyEnabled, "disabled preset does not claim its key");
+        Equal("Ctrl+Alt+J", disabledPreset.ReadingHotkey);
+        string path = Path.Combine(TestDirectory, "reading.json");
+        SettingsStore.Save(path, disabledPreset with { ReadingHotkeyEnabled = false });
+        var loaded = SettingsStore.Load(path)!;
+        Equal("Ctrl+Alt+J", loaded.ReadingHotkey);
+        Check(!loaded.ReadingHotkeyEnabled, "disabled choice survives saving");
+        File.WriteAllText(path, "{}");
+        Check(SettingsStore.Load(path)!.ReadingHotkeyEnabled, "old settings receive reading default");
+        Equal(CaptureMode.NeedSelection, Capture.Decide(false, "Telegram", AppSettings.DefaultWholeInputApps, reading: true));
+        Equal(CaptureMode.Selection, Capture.Decide(true, "Telegram", AppSettings.DefaultWholeInputApps, reading: true));
+        foreach (string original in new[] { "Hello", "안녕", "こんにちは" })
+        {
+            var home = Languages.Find("ko")!;
+            var result = new Translator((_, _, _, _) => Task.FromResult("안녕"))
+                .TranslateAsync(new AppSettings { HomeLanguage = "ko" }, home, original, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            Equal(home, result.Output);
+        }
+    }
+
+    private static void InputProtection()
+    {
+        Check(Capture.SelectionUnchanged("one\r\ntwo", "one\ntwo"), "clipboard newline conversion is harmless");
+        Check(!Capture.SelectionUnchanged("old", "new"), "edited text rejected");
+        Check(!Capture.SelectionUnchanged("old", null), "lost selection rejected");
+        Check(!Capture.SelectionUnchanged("old ", "old"), "whitespace changes must not be ignored");
+        Check(Capture.InputInvalidates(1, 0), "key down invalidates replacement");
+        Check(!Capture.InputInvalidates(1, 1), "releasing the triggering shortcut is harmless");
+        Check(!Capture.InputInvalidates(0, 0), "pointer movement does not invalidate");
+        Check(Capture.InputInvalidates(0, 1), "mouse click invalidates");
+        Check(Capture.InputInvalidates(0, 0x400), "scroll invalidates");
+    }
+
+    private static void TranslationCancellation() => CheckCancellationAsync().GetAwaiter().GetResult();
+
+    private static async Task CheckCancellationAsync()
+    {
+        foreach (bool fallback in new[] { false, true })
+        {
+            using var cancel = new CancellationTokenSource();
+            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            int calls = 0;
+            var translator = new Translator(async (engine, _, _, token) =>
+            {
+                calls++;
+                if (fallback && engine.Provider == Provider.Claude) throw new EngineException("offline");
+                var stopped = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+                using var subscription = token.Register(() => stopped.TrySetCanceled(token));
+                started.SetResult();
+                return await stopped.Task;
+            });
+            Task<TranslationResult> pending = translator.TranslateAsync(new AppSettings { HomeLanguage = "ko" },
+                Languages.Find("en")!, "안녕", cancel.Token);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            cancel.Cancel();
+            try
+            {
+                await pending.WaitAsync(TimeSpan.FromSeconds(10));
+                throw new InvalidOperationException("Cancelled translation returned a result.");
+            }
+            catch (OperationCanceledException) { }
+            Equal(fallback ? 2 : 1, calls);
+        }
+        using var late = new CancellationTokenSource();
+        var ignoresToken = new Translator((_, _, _, _) =>
+        {
+            late.Cancel();
+            return Task.FromResult("stale result");
+        });
+        Throws<OperationCanceledException>(() => ignoresToken.TranslateAsync(new AppSettings(),
+            Languages.Find("en")!, "안녕", late.Token).GetAwaiter().GetResult());
+        using var failedAfterCancel = new CancellationTokenSource();
+        var failsLate = new Translator((_, _, _, _) =>
+        {
+            failedAfterCancel.Cancel();
+            throw new EngineException("process ended while cancelling");
+        });
+        Throws<OperationCanceledException>(() => failsLate.TranslateAsync(
+            new AppSettings { Fallback = new EngineChoice(Provider.None, "") },
+            Languages.Find("en")!, "안녕", failedAfterCancel.Token).GetAwaiter().GetResult());
     }
 
     private static void EngineArguments()
@@ -445,6 +552,41 @@ internal static class Program
         Check(error.Message.Contains("PING", StringComparison.OrdinalIgnoreCase), "timeout names the CLI");
     }
 
+    private static void ProcessCancellation() => ProcessCancellationAsync().GetAwaiter().GetResult();
+
+    private static async Task ProcessCancellationAsync()
+    {
+        string name = "InlineTranslator-cancel-" + Guid.NewGuid().ToString("N");
+        using var pipe = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+        using var cancel = new CancellationTokenSource();
+        Task connected = pipe.WaitForConnectionAsync();
+        string exe = Environment.ProcessPath!;
+        string[] args = Path.GetFileNameWithoutExtension(exe).Equals("dotnet", StringComparison.OrdinalIgnoreCase)
+            ? [typeof(Program).Assembly.Location, "cancellation-child", name] : ["cancellation-child", name];
+        Task<ProcessResult> run = ProcessRunner.RunAsync(exe, args, "", TestDirectory, TimeSpan.FromSeconds(30), cancel.Token);
+        try
+        {
+            await connected.WaitAsync(TimeSpan.FromSeconds(15));
+            using var reader = new StreamReader(pipe, leaveOpen: true);
+            int pid = int.Parse((await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10)))!);
+            using var child = Process.GetProcessById(pid);
+            cancel.Cancel();
+            try
+            {
+                await run.WaitAsync(TimeSpan.FromSeconds(10));
+                throw new InvalidOperationException("Cancelled CLI returned a result.");
+            }
+            catch (OperationCanceledException) { }
+            Check(child.HasExited, "cancellation completes only after the process exits");
+        }
+        finally
+        {
+            cancel.Cancel();
+            try { await run.WaitAsync(TimeSpan.FromSeconds(10)); }
+            catch (OperationCanceledException) { }
+        }
+    }
+
     private static void ReleaseParsing()
     {
         string digest = new('a', 64);
@@ -458,7 +600,7 @@ internal static class Program
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://github.com/a","assets":[{"name":"inline-translator-win-x64.zip","browser_download_url":"https://github.com/x"}]}""")!.PackageUrl is null, "no digest means no automatic install");
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://evil.example/"}""") is null, "non-GitHub page rejected");
         Check(Parse("""{"tag_name":"latest","html_url":"https://github.com/a"}""") is null, "non-version tag rejected");
-        Equal(new Version(0, 1, 7), UpdateChecker.Current);
+        Equal(new Version(0, 1, 8), UpdateChecker.Current);
     }
 
     private static void UpdateInstall()

@@ -119,10 +119,12 @@ internal static class Keyboard
 
     public static bool IsDown(ushort key) => (Native.GetAsyncKeyState(key) & 0x8000) != 0;
 
-    public static async Task WaitForModifiersReleasedAsync(TimeSpan timeout)
+    public static async Task WaitForModifiersReleasedAsync(TimeSpan timeout, CancellationToken token = default)
     {
         var clock = Stopwatch.StartNew();
-        while (AnyModifierDown() && clock.Elapsed < timeout) await Task.Delay(15);
+        while (AnyModifierDown() && clock.Elapsed < timeout) await Task.Delay(15, token);
+        token.ThrowIfCancellationRequested();
+        if (AnyModifierDown()) throw new TimeoutException("Release the shortcut keys before translating.");
     }
 
     private static Native.Input Key(ushort virtualKey, uint flags) => new()

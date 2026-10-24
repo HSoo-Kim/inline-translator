@@ -4,6 +4,7 @@ namespace InlineTranslator;
 
 internal sealed class TrayApp : ApplicationContext
 {
+    internal const int ReadingHotkeyId = AppSettings.PresetCount + 1;
     private static readonly TimeSpan SelectionProbe = TimeSpan.FromMilliseconds(350);
     private static readonly TimeSpan CopyWait = TimeSpan.FromMilliseconds(800);
     private static readonly TimeSpan PasteSettle = TimeSpan.FromMilliseconds(400);
@@ -36,7 +37,7 @@ internal sealed class TrayApp : ApplicationContext
         this.settings = settings;
         text = new UiText(settings.UiLanguage);
         hotkeys = new HotkeyWindow(activationMessage);
-        hotkeys.HotkeyPressed += id => _ = TranslateActiveAsync(id - 1);
+        hotkeys.HotkeyPressed += id => _ = TranslateActiveAsync(id - 1, reading: id == ReadingHotkeyId);
         hotkeys.ActivationRequested += ShowSettings;
 
         var menu = new ContextMenuStrip { Renderer = new RoundMenuRenderer(), Font = Ui.Regular() };
@@ -99,12 +100,17 @@ internal sealed class TrayApp : ApplicationContext
         hotkeys.UnregisterAll();
         var failed = new List<string>();
         if (!pauseItem.Checked)
+        {
             for (int i = 0; i < settings.Presets.Count; i++)
             {
                 var preset = settings.Presets[i];
                 if (preset.Enabled && Hotkey.TryParse(preset.Hotkey, out var hotkey) && !hotkeys.Register(i + 1, hotkey))
                     failed.Add(preset.Hotkey);
             }
+            if (settings.ReadingHotkeyEnabled && Hotkey.TryParse(settings.ReadingHotkey, out var readingHotkey)
+                && !hotkeys.Register(ReadingHotkeyId, readingHotkey))
+                failed.Add(settings.ReadingHotkey);
+        }
         RefreshTexts();
         if (notify && failed.Count > 0)
             Notify(text.T("{0} is already used by another program. Choose another hotkey in Settings.", string.Join(", ", failed)), ToolTipIcon.Warning);
@@ -150,28 +156,47 @@ internal sealed class TrayApp : ApplicationContext
         return ApplyHotkeys(notify: false);
     }
 
-    private async Task TranslateActiveAsync(int presetIndex)
+    private async Task TranslateActiveAsync(int presetIndex, bool reading = false)
     {
-        if (busy || installing || presetIndex < 0 || presetIndex >= settings.Presets.Count) return;
-        var preset = settings.Presets[presetIndex];
-        var target = Languages.Find(preset.TargetLanguage);
-        if (!preset.Enabled || target is null) return;
+        if (busy || installing) return;
+        if (reading ? !settings.ReadingHotkeyEnabled : presetIndex < 0 || presetIndex >= settings.Presets.Count) return;
+        var preset = reading ? null : settings.Presets[presetIndex];
+        var target = reading ? Languages.Home(settings.HomeLanguage) : Languages.Find(preset!.TargetLanguage);
+        if ((!reading && !preset!.Enabled) || target is null) return;
         busy = true;
         ClipboardSnapshot? snapshot = null;
         bool restoreClipboard = false;
+        uint ownedClipboard = 0;
+        TranslationGuard? guard = null;
         try
         {
-            await Keyboard.WaitForModifiersReleasedAsync(TimeSpan.FromSeconds(2));
             nint window = Native.GetForegroundWindow();
+            guard = new TranslationGuard(window);
+            var token = guard.Token;
+            async Task<string?> CopySelectionAsync(bool selectAll, TimeSpan wait)
+            {
+                uint before = Native.GetClipboardSequenceNumber();
+                try { return await CopyAsync(selectAll, wait, token); }
+                finally
+                {
+                    uint after = Native.GetClipboardSequenceNumber();
+                    if (after != before && !guard.InputChanged)
+                    {
+                        ownedClipboard = after;
+                        restoreClipboard = true;
+                    }
+                }
+            }
+            await Keyboard.WaitForModifiersReleasedAsync(TimeSpan.FromSeconds(2), token);
+            if (Native.GetForegroundWindow() != window) return;
             snapshot = ClipboardSnapshot.Take();
-            string? copied = await CopyAsync(selectAll: false, SelectionProbe);
-            restoreClipboard = copied is not null;
+            string? copied = await CopySelectionAsync(selectAll: false, SelectionProbe);
             string? process = ForegroundWindow.ProcessName(window);
-            var mode = Capture.Decide(!string.IsNullOrWhiteSpace(copied), process, settings.WholeInputApps);
+            var mode = Capture.Decide(!string.IsNullOrWhiteSpace(copied), process, settings.WholeInputApps, reading);
             if (mode == CaptureMode.WholeInput)
             {
-                copied = await CopyAsync(selectAll: true, CopyWait);
-                restoreClipboard |= copied is not null;
+                if (!guard.CanReplace) return;
+                copied = await CopySelectionAsync(selectAll: true, CopyWait);
                 if (string.IsNullOrWhiteSpace(copied))
                 {
                     Notify(text.T("Could not read the input box in {0}. Drag-select the text, then press the hotkey.", process ?? ""), ToolTipIcon.Info);
@@ -189,13 +214,17 @@ internal sealed class TrayApp : ApplicationContext
                 return;
             }
 
-            bool readOnly = mode == CaptureMode.Selection && FocusInspector.IsReadOnly(window);
+            guard.CaptureFocus();
+            bool readOnly = reading || mode == CaptureMode.Selection && FocusInspector.IsReadOnly(window);
             var mouse = Cursor.Position;
             Rectangle? selection = settings.BubblePosition == "selection" && mode == CaptureMode.Selection ? SelectionLocator.Find(window) : null;
             var near = selection ?? new Rectangle(mouse.X + 12, mouse.Y, 1, 12);
             var heading = Direction.Resolve(copied, target, Languages.Home(settings.HomeLanguage)) ?? target;
-            indicator.ShowNear(new Point(near.Left, near.Bottom), text.T("Translating to {0}…", heading.NativeName));
-            var result = await translator.TranslateAsync(settings, target, copied, CancellationToken.None);
+            if (restoreClipboard && Native.GetClipboardSequenceNumber() == ownedClipboard) RestoreClipboard(snapshot);
+            restoreClipboard = false;
+            indicator.ShowNear(new Point(near.Left, near.Bottom), text.T("Translating to {0}… · Esc to cancel", heading.NativeName));
+            var result = await translator.TranslateAsync(settings, target, copied, token);
+            token.ThrowIfCancellationRequested();
             indicator.Hide();
             if (result.PrimaryError is { } primaryError)
             {
@@ -205,8 +234,8 @@ internal sealed class TrayApp : ApplicationContext
                         EngineCli.ProductName(settings.Primary.Provider), EngineCli.ProductName(result.Engine.Provider)));
             }
 
-            void ShowBubble() => bubble.ShowAt(near, $"→ {(result.Output ?? target).NativeName} · {result.Engine.DisplayName}", result.Text,
-                text.T("Read-only text · press any key or click to close"), settings.BubbleTheme == "dark",
+            void ShowBubble(bool changed = false) => bubble.ShowAt(near, $"→ {(result.Output ?? target).NativeName} · {result.Engine.DisplayName}", result.Text,
+                text.T(changed ? "Input changed · translation shown without replacing text" : "Translation · press any key or click to close"), settings.BubbleTheme == "dark",
                 followMouse: settings.BubblePosition == "mouse");
 
             if (readOnly)
@@ -215,21 +244,39 @@ internal sealed class TrayApp : ApplicationContext
                 return;
             }
 
-            restoreClipboard = true;
-            PrivateClipboard.SetText(result.Text);
-            if (Native.GetForegroundWindow() != window)
+            if (!guard.CanReplace)
             {
-                restoreClipboard = false;
-                Notify(text.T("You switched windows, so the translation was copied instead. Paste it with Ctrl+V."), ToolTipIcon.Info);
+                ShowBubble(changed: true);
                 return;
             }
-            if (mode == CaptureMode.WholeInput) Keyboard.Chord(Native.VkControl, Native.VkA);
+
+            // Verify the original selection, including whole-input selections. Never select all again:
+            // doing so could overwrite text typed while the engine was working.
+            snapshot = ClipboardSnapshot.Take();
+            string? current = await CopySelectionAsync(selectAll: false, SelectionProbe);
+            if (!guard.CanReplace || !Capture.SelectionUnchanged(copied, current))
+            {
+                ShowBubble(changed: true);
+                return;
+            }
+            token.ThrowIfCancellationRequested();
+            guard.FinishTranslation();
+            PrivateClipboard.SetText(result.Text);
+            ownedClipboard = Native.GetClipboardSequenceNumber();
+            restoreClipboard = true;
             Keyboard.Chord(Native.VkControl, Native.VkV);
-            await Task.Delay(PasteSettle);
+            await Task.Delay(PasteSettle, token);
             // Many apps do not report read-only text. If the original selection is still selected after
             // pasting, the paste was ignored, so show the translation instead.
-            if (mode == CaptureMode.Selection && Capture.PasteWasIgnored(copied, await CopyAsync(selectAll: false, SelectionProbe)))
-                ShowBubble();
+            if (mode == CaptureMode.Selection && guard.CanReplace)
+            {
+                string? afterPaste = await CopySelectionAsync(selectAll: false, SelectionProbe);
+                if (Capture.PasteWasIgnored(copied, afterPaste)) ShowBubble();
+            }
+        }
+        catch (OperationCanceledException) when (guard?.Token.IsCancellationRequested == true)
+        {
+            // User cancellation is not an engine failure and must not start the fallback or log an error.
         }
         catch (TranslationFailedException failure)
         {
@@ -252,13 +299,16 @@ internal sealed class TrayApp : ApplicationContext
         finally
         {
             indicator.Hide();
-            if (restoreClipboard && snapshot is not null) RestoreClipboard(snapshot);
+            if (restoreClipboard && snapshot is not null && Native.GetClipboardSequenceNumber() == ownedClipboard)
+                RestoreClipboard(snapshot);
+            guard?.Dispose();
             busy = false;
         }
     }
 
-    private static async Task<string?> CopyAsync(bool selectAll, TimeSpan wait)
+    private static async Task<string?> CopyAsync(bool selectAll, TimeSpan wait, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
         uint before = Native.GetClipboardSequenceNumber();
         if (selectAll) Keyboard.Chord(Native.VkControl, Native.VkA);
         Keyboard.Chord(Native.VkControl, Native.VkC);
@@ -266,8 +316,9 @@ internal sealed class TrayApp : ApplicationContext
         while (Native.GetClipboardSequenceNumber() == before)
         {
             if (clock.Elapsed > wait) return null;
-            await Task.Delay(15);
+            await Task.Delay(15, token);
         }
+        token.ThrowIfCancellationRequested();
         return Clipboard.ContainsText() ? Clipboard.GetText() : "";
     }
 

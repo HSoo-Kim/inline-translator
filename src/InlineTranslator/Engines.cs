@@ -13,6 +13,7 @@ public static class ProcessRunner
     public static async Task<ProcessResult> RunAsync(string fileName, IEnumerable<string> arguments, string input,
         string workingDirectory, TimeSpan timeout, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
         var utf8 = new UTF8Encoding(false);
         var info = new ProcessStartInfo(fileName)
         {
@@ -49,6 +50,8 @@ public static class ProcessRunner
         catch (OperationCanceledException)
         {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync(CancellationToken.None);
+            await Task.WhenAll(output, error);
             token.ThrowIfCancellationRequested();
             throw new TimeoutException(
                 $"{Path.GetFileNameWithoutExtension(fileName)} did not answer within {timeout.TotalSeconds:0} seconds.");

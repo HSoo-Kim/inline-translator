@@ -40,6 +40,8 @@ public sealed record AppSettings
     public EngineChoice Primary { get; init; } = new(Provider.Claude, DefaultClaudeModel);
     public EngineChoice Fallback { get; init; } = new(Provider.Codex, DefaultCodexModel);
     public IReadOnlyList<HotkeyPreset> Presets { get; init; } = DefaultPresets;
+    public bool ReadingHotkeyEnabled { get; init; } = true;
+    public string ReadingHotkey { get; init; } = "Ctrl+Alt+R";
     public string Tone { get; init; } = "natural";
     public string HomeLanguage { get; init; } = "";
     public IReadOnlyList<string> WholeInputApps { get; init; } = DefaultWholeInputApps;
@@ -73,6 +75,8 @@ public sealed record AppSettings
             presets.Add(new HotkeyPreset(enabled, valid ? hotkey.ToString() : "", language));
         }
 
+        bool readingValid = InlineTranslator.Hotkey.TryParse(ReadingHotkey, out var readingHotkey);
+
         var apps = (WholeInputApps ?? [])
             .Select(NormalizeAppName)
             .Where(name => name.Length > 0)
@@ -90,6 +94,8 @@ public sealed record AppSettings
             Primary = primary,
             Fallback = fallback,
             Presets = presets,
+            ReadingHotkeyEnabled = ReadingHotkeyEnabled && readingValid && !used.Contains(readingHotkey),
+            ReadingHotkey = readingValid ? readingHotkey.ToString() : "",
             Tone = Tones.Contains(Tone) ? Tone : "natural",
             HomeLanguage = Languages.Find(HomeLanguage)?.Code ?? "",
             BubbleTheme = BubbleThemes.Contains(BubbleTheme) ? BubbleTheme : "light",

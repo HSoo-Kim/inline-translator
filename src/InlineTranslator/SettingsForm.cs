@@ -13,6 +13,8 @@ internal sealed class SettingsForm : Form
     private readonly Func<Task> installUpdate;
     private readonly EngineRow primary, fallback;
     private readonly List<(ToggleSwitch Enabled, HotkeyBox Hotkey, PillDropdown Language)> presets = [];
+    private readonly ToggleSwitch readingHotkeyEnabled = new("") { Anchor = AnchorStyles.Left, Margin = new Padding(0, 4, 10, 4) };
+    private readonly HotkeyBox readingHotkey;
     private readonly PillDropdown tone = new(190);
     private readonly PillDropdown homeLanguage = new(250);
     private readonly PillDropdown uiLanguage = new(160);
@@ -35,6 +37,7 @@ internal sealed class SettingsForm : Form
     private readonly Label testResult;
     private readonly PillButton updateButton = new("", PillKind.Soft) { Visible = false, Margin = new Padding(0, 0, 8, 0) };
     private readonly ToolTip tips = new();
+    internal Task InitialSignIn { get; private set; } = Task.CompletedTask;
 
     public SettingsForm(AppSettings settings, UiText text, Icon icon, ReleaseInfo? update,
         Func<AppSettings, IReadOnlyList<string>> save, Func<Task> installUpdate, Action<string> changeLanguage)
@@ -109,7 +112,7 @@ internal sealed class SettingsForm : Form
             var hotkey = new HotkeyBox(text);
             var field = new RoundedPanel(Color.White, Ui.Line, 10)
             {
-                Size = new Size(170, 34),
+                Size = new Size(170, Math.Max(34, hotkey.PreferredHeight + 12)),
                 Padding = new Padding(10, 8, 10, 4),
                 Margin = new Padding(0, 3, 10, 3),
                 Anchor = AnchorStyles.Left,
@@ -138,6 +141,27 @@ internal sealed class SettingsForm : Form
         var homeNote = Ui.Text(text.T("Text in your language goes to the hotkey's language; text in any other language comes to your language. For example, Korean becomes English and English becomes Korean."), Ui.Muted, Ui.Regular(8.5f), ContentWidth - 40);
         homeNote.Margin = new Padding(0, 2, 0, 0);
         hotkeyCard.Controls.Add(homeNote);
+        var readingLabel = Ui.Text(text.T("Read-only translation hotkey"), Ui.Ink);
+        readingLabel.Margin = new Padding(0, 12, 0, 0);
+        hotkeyCard.Controls.Add(readingLabel);
+        readingHotkey = new HotkeyBox(text);
+        var readingField = new RoundedPanel(Color.White, Ui.Line, 10)
+        {
+            Size = new Size(170, Math.Max(34, readingHotkey.PreferredHeight + 12)),
+            Padding = new Padding(10, 8, 10, 4),
+            Margin = new Padding(0, 3, 10, 3),
+            Anchor = AnchorStyles.Left,
+        };
+        readingField.Controls.Add(readingHotkey);
+        readingHotkeyEnabled.CheckedChanged += (_, _) =>
+            readingHotkey.ForeColor = readingHotkeyEnabled.Checked ? Ui.Ink : Ui.Gray;
+        var readingRow = Grid(4);
+        readingRow.Controls.AddRange([readingHotkeyEnabled, readingField, Ui.Text("→", Ui.Muted), Ui.Text(text.T("My language"), Ui.Muted)]);
+        hotkeyCard.Controls.Add(readingRow);
+        var readingNote = Ui.Text(text.T("Select text first. This hotkey always translates into My language and only shows a bubble, without pasting or replacing text."),
+            Ui.Muted, Ui.Regular(8.5f), ContentWidth - 40);
+        readingNote.Margin = new Padding(0, 2, 0, 0);
+        hotkeyCard.Controls.Add(readingNote);
         page.Controls.Add(hotkeyCard.Panel);
 
         var appsCard = Card(text.T("Apps that translate the whole input box"),
@@ -190,7 +214,7 @@ internal sealed class SettingsForm : Form
 
         LoadSettings(settings);
         SetUpdate(update);
-        Shown += async (_, _) => await RefreshSignInAsync();
+        Shown += async (_, _) => await (InitialSignIn = RefreshSignInAsync());
 
         var preferred = page.GetPreferredSize(Size.Empty);
         int maxHeight = Screen.FromPoint(Cursor.Position).WorkingArea.Height - 60;
@@ -299,6 +323,9 @@ internal sealed class SettingsForm : Form
             presets[i].Language.Enabled = preset.Enabled;
             presets[i].Hotkey.ForeColor = preset.Enabled ? Ui.Ink : Ui.Gray;
         }
+        readingHotkeyEnabled.Checked = settings.ReadingHotkeyEnabled;
+        readingHotkey.SetHotkey(Hotkey.TryParse(settings.ReadingHotkey, out var reading) ? reading : null);
+        readingHotkey.ForeColor = settings.ReadingHotkeyEnabled ? Ui.Ink : Ui.Gray;
         tone.Select(settings.Tone);
         homeLanguage.Select(settings.HomeLanguage);
         bubbleTheme.Select(settings.BubbleTheme);
@@ -350,6 +377,8 @@ internal sealed class SettingsForm : Form
         Fallback = fallback.Get(),
         Presets = presets.Select(row => new HotkeyPreset(row.Enabled.Checked, row.Hotkey.GetHotkey()?.ToString() ?? "",
             row.Language.SelectedValue as string ?? "en")).ToArray(),
+        ReadingHotkeyEnabled = readingHotkeyEnabled.Checked,
+        ReadingHotkey = readingHotkey.GetHotkey()?.ToString() ?? "",
         Tone = tone.SelectedValue as string ?? "natural",
         HomeLanguage = homeLanguage.SelectedValue as string ?? "",
         BubbleTheme = bubbleTheme.SelectedValue as string ?? "light",
@@ -363,7 +392,9 @@ internal sealed class SettingsForm : Form
     private void Save()
     {
         var updated = Collect();
-        var duplicates = updated.Presets.Where(preset => preset.Enabled).GroupBy(preset => preset.Hotkey)
+        var activeHotkeys = updated.Presets.Where(preset => preset.Enabled).Select(preset => preset.Hotkey);
+        if (updated.ReadingHotkeyEnabled) activeHotkeys = activeHotkeys.Append(updated.ReadingHotkey);
+        var duplicates = activeHotkeys.GroupBy(hotkey => hotkey, StringComparer.OrdinalIgnoreCase)
             .Where(group => group.Count() > 1).Select(group => group.Key).ToArray();
         if (duplicates.Length > 0)
         {

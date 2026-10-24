@@ -40,13 +40,19 @@ public static class Capture
     public static bool PasteWasIgnored(string selected, string? copiedAfterPaste) =>
         copiedAfterPaste is not null && Normalize(copiedAfterPaste).Length > 0 && Normalize(copiedAfterPaste) == Normalize(selected);
 
+    public static bool SelectionUnchanged(string original, string? current) =>
+        current is not null && original.Replace("\r\n", "\n") == current.Replace("\r\n", "\n");
+
+    public static bool InputInvalidates(uint type, ushort flags) =>
+        type == 0 ? flags != 0 : type == 1 && (flags & 1) == 0;
+
     private static string Normalize(string text) => text.Replace("\r\n", "\n").Trim();
 
-    public static CaptureMode Decide(bool selectionCopied, string? processName, IEnumerable<string> wholeInputApps)
+    public static CaptureMode Decide(bool selectionCopied, string? processName, IEnumerable<string> wholeInputApps, bool reading = false)
     {
         if (selectionCopied) return CaptureMode.Selection;
         string name = AppSettings.NormalizeAppName(processName);
-        return name.Length > 0 && wholeInputApps.Contains(name, StringComparer.OrdinalIgnoreCase)
+        return !reading && name.Length > 0 && wholeInputApps.Contains(name, StringComparer.OrdinalIgnoreCase)
             ? CaptureMode.WholeInput
             : CaptureMode.NeedSelection;
     }
@@ -123,6 +129,7 @@ public sealed class Translator(EngineRun run)
     public async Task<TranslationResult> TranslateAsync(AppSettings settings, TargetLanguage target, string text,
         CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
         var home = Languages.Home(settings.HomeLanguage);
         var output = Direction.Resolve(text, target, home);
         string instructions = output is not null
@@ -137,6 +144,7 @@ public sealed class Translator(EngineRun run)
         {
             primaryError = error;
         }
+        token.ThrowIfCancellationRequested();
         if (settings.Fallback.Provider == Provider.None)
             throw new TranslationFailedException(primaryError.Message, primaryError, null);
         try
@@ -145,6 +153,7 @@ public sealed class Translator(EngineRun run)
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
+            token.ThrowIfCancellationRequested();
             throw new TranslationFailedException(error.Message, primaryError, error);
         }
     }
@@ -159,6 +168,7 @@ public sealed class Translator(EngineRun run)
     private async Task<string> RunAsync(EngineChoice engine, string instructions, string text, TargetLanguage? output, CancellationToken token)
     {
         string result = Unwrap(await run(engine, instructions, Wrap(text, output), token));
+        token.ThrowIfCancellationRequested();
         return result.Length > 0 ? result : throw new InvalidDataException(engine.DisplayName + " returned an empty translation.");
     }
 }
