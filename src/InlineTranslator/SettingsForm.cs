@@ -49,8 +49,8 @@ internal sealed class SettingsForm : Form
         Text = "Inline Translator — " + text.T("Settings");
         Icon = icon;
         Font = Ui.Regular();
-        FormBorderStyle = FormBorderStyle.FixedSingle;
-        MaximizeBox = false;
+        FormBorderStyle = FormBorderStyle.Sizable;
+        MaximizeBox = true;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Ui.Canvas;
@@ -206,7 +206,13 @@ internal sealed class SettingsForm : Form
         cancelButton.Click += (_, _) => Close();
         updateButton.Click += async (_, _) => await installUpdate();
         footer.Controls.AddRange([version, updateButton, cancelButton, saveButton]);
-        footer.Layout += (_, _) => Ui.LayoutFooter(footer, version, [updateButton, cancelButton, saveButton]);
+        footer.Layout += (_, _) =>
+        {
+            int buttonsWidth = new[] { updateButton, cancelButton, saveButton }.Where(button => button.Visible)
+                .Sum(button => Math.Max(button.GetPreferredSize(Size.Empty).Width, button.MinimumSize.Width) + Ui.Scale(footer, 8));
+            version.Visible = footer.ClientSize.Width >= buttonsWidth + version.PreferredWidth + Ui.Scale(footer, 48);
+            Ui.LayoutFooter(footer, version.Visible ? version : null, [updateButton, cancelButton, saveButton]);
+        };
         Controls.Add(scroller);
         Controls.Add(footer);
         AcceptButton = saveButton;
@@ -230,13 +236,49 @@ internal sealed class SettingsForm : Form
     public void SetUpdate(ReleaseInfo? release)
     {
         updateButton.Visible = release is not null;
-        if (release is not null) updateButton.Text = "↑ " + text.T("Update to {0}", release.Tag);
+        if (release is not null)
+        {
+            updateButton.Text = text.T("Update");
+            tips.SetToolTip(updateButton, text.T("Update to {0}", release.Tag));
+        }
     }
 
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
         Ui.RoundWindow(this);
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        FitToWorkingArea(Screen.FromControl(this).WorkingArea);
+        base.OnShown(e);
+    }
+
+    protected override void OnDpiChanged(DpiChangedEventArgs e)
+    {
+        base.OnDpiChanged(e);
+        if (Visible) BeginInvoke(() => FitToWorkingArea(Screen.FromControl(this).WorkingArea));
+    }
+
+    protected override void WndProc(ref Message message)
+    {
+        base.WndProc(ref message);
+        if (message.Msg == 0x007E && Visible) // WM_DISPLAYCHANGE: remote desktop resolution changed.
+            BeginInvoke(() => FitToWorkingArea(Screen.FromControl(this).WorkingArea));
+    }
+
+    internal void FitToWorkingArea(Rectangle area)
+    {
+        int margin = Math.Min(Ui.Scale(this, 12), Math.Min(area.Width, area.Height) / 10);
+        var available = Rectangle.Inflate(area, -margin, -margin);
+        MinimumSize = new Size(Math.Min(available.Width, Math.Max(480, Ui.Scale(this, 280))),
+            Math.Min(available.Height, Math.Max(300, Ui.Scale(this, 180))));
+        if (WindowState == FormWindowState.Maximized) return;
+        var size = new Size(Math.Clamp(Width, MinimumSize.Width, available.Width),
+            Math.Clamp(Height, MinimumSize.Height, available.Height));
+        Bounds = new Rectangle(Math.Clamp(Left, available.Left, available.Right - size.Width),
+            Math.Clamp(Top, available.Top, available.Bottom - size.Height), size.Width, size.Height);
     }
 
     private Control Header(Icon icon, Action<string> changeLanguage)

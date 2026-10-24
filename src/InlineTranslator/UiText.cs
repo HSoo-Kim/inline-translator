@@ -43,6 +43,7 @@ public sealed class UiText
         ["Paused"] = ("일시 중지됨", "已暂停", "一時停止中"),
         ["Exit"] = ("종료", "退出", "終了"),
         ["Update to {0}"] = ("{0}(으)로 업데이트", "更新到 {0}", "{0} に更新"),
+        ["Update"] = ("업데이트", "更新", "更新"),
         ["{0} is already used by another program. Choose another hotkey in Settings."] =
             ("{0}을(를) 다른 프로그램이 이미 쓰고 있습니다. 설정에서 다른 단축키를 고르세요.",
              "{0} 已被其他程序占用。请在设置中选择其他快捷键。",

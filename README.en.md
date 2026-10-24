@@ -59,6 +59,8 @@ Built for Windows 11 x64. The executable includes .NET, so nothing else to insta
 
 ## Settings
 
+Drag the window borders to resize Settings, or maximize it. On small or remote desktops, scroll the content while Save and Cancel stay fixed at the bottom. Resolution or scaling changes keep the window within the current working area.
+
 <p align="center"><img src="docs/images/settings-en.png" width="520" alt="Inline Translator settings window"></p>
 
 | Section | What it does |

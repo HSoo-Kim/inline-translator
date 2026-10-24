@@ -59,6 +59,8 @@
 
 ## 设置
 
+设置窗口可拖动边框调整大小，也可最大化。在小屏幕或远程桌面中滚动内容即可，保存和取消按钮固定在底部。分辨率或缩放变化时，窗口会调整到当前工作区域内。
+
 <p align="center"><img src="docs/images/settings-zh-CN.png" width="520" alt="Inline Translator 设置窗口"></p>
 
 | 项目 | 说明 |

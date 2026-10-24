@@ -14,6 +14,8 @@ internal static class Program
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => RenderAsync(folder)) : 2;
         if (args is ["verify"])
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(OperationQa.VerifyAsync) : 2;
+        if (args is ["window-check", var windowFolder])
+            return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => WindowQa.VerifyAsync(windowFolder)) : 2;
         if (args is ["lnk", var shortcut])
         {
             try { Console.WriteLine("target: " + AppCatalog.ShortcutTarget(shortcut)); }
@@ -189,6 +191,7 @@ internal static class Program
             await ShowAsync(picker);
             Capture(picker, Path.Combine(artifacts, "app-picker-ko.png"));
         }
+        await WindowQa.VerifyAsync(Path.Combine(artifacts, "window-qa"));
     }
 
     private static int Translate(string provider, string model, string language, string message)
