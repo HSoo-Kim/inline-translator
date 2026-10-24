@@ -55,6 +55,14 @@ internal static class SettingsQa
         Check(form.HasChanges && save.Enabled, "Dropdown selection changes enable Save.");
         tone.Select(settings.Tone);
         Check(!form.HasChanges && !save.Enabled, "Reverting dropdown selection disables Save.");
+        var readingLanguage = Find<PillDropdown>(form, "reading-language");
+        readingLanguage.Select("ja");
+        form.SelectTab("engines");
+        form.SelectTab("translation");
+        Check((string?)readingLanguage.SelectedValue == "ja" && form.HasChanges && save.Enabled,
+            "Reading target selection must survive tabs and enable Save.");
+        readingLanguage.Select(settings.ReadingTargetLanguage);
+        Check(!form.HasChanges && !save.Enabled, "Restoring reading target clears dirty state.");
         var reading = Find<HotkeyBox>(form, "reading-hotkey");
         var originalReading = reading.GetHotkey();
         Hotkey.TryParse(settings.Presets[0].Hotkey, out var duplicate);

@@ -20,6 +20,7 @@ internal sealed class SettingsForm : Form
     private readonly HotkeyBox readingHotkey;
     private readonly PillDropdown tone = Dropdown("tone");
     private readonly PillDropdown homeLanguage = Dropdown("home-language");
+    private readonly PillDropdown readingLanguage = Dropdown("reading-language");
     private readonly PillDropdown uiLanguage = Dropdown("ui-language");
     private readonly PillDropdown bubbleTheme = Dropdown("bubble-theme");
     private readonly PillDropdown bubblePosition = Dropdown("bubble-position");
@@ -137,13 +138,16 @@ internal sealed class SettingsForm : Form
         var readingCard = Card(text.T("Read-only translation hotkey"));
         readingCard.Controls.Add(readingHotkeyEnabled);
         readingCard.Controls.Add(Row(text.T("Hotkey"), HotkeyField(readingHotkey)));
+        readingLanguage.SetOptions(Languages.All.Select(language => ((object)language.Code, language.ToString())));
+        readingCard.Controls.Add(Row(text.T("Target language"), readingLanguage));
         var readingError = ErrorLabel("reading-error");
         hotkeyErrors.Add(readingError);
         readingCard.Controls.Add(readingError);
-        readingCard.Controls.Add(Note(text.T("Selected text is translated into My language in a bubble. The original stays unchanged.")));
+        readingCard.Controls.Add(Note(text.T("Text in My language goes to the selected language; other text comes to My language. The original stays unchanged.")));
         readingHotkeyEnabled.CheckedChanged += (_, _) =>
         {
             readingHotkey.ForeColor = readingHotkeyEnabled.Checked ? Ui.Ink : Ui.Gray;
+            readingLanguage.Enabled = readingHotkeyEnabled.Checked;
             registrationErrors.Remove(AppSettings.PresetCount);
             RefreshDraftState();
         };
@@ -262,7 +266,7 @@ internal sealed class SettingsForm : Form
         CancelButton = cancelButton;
 
         LoadSettings(settings);
-        foreach (var dropdown in new[] { tone, homeLanguage, uiLanguage, bubbleTheme, bubblePosition }.Concat(presets.Select(row => row.Language)))
+        foreach (var dropdown in new[] { tone, homeLanguage, readingLanguage, uiLanguage, bubbleTheme, bubblePosition }.Concat(presets.Select(row => row.Language)))
             dropdown.SelectionChanged += RefreshDraftState;
         foreach (var toggle in new[] { startWithWindows, checkForUpdates, autoInstall })
             toggle.CheckedChanged += (_, _) =>
@@ -442,6 +446,8 @@ internal sealed class SettingsForm : Form
         }
         readingHotkeyEnabled.Checked = settings.ReadingHotkeyEnabled;
         readingHotkey.SetDraft(settings.ReadingHotkey);
+        readingLanguage.Select(settings.ReadingTargetLanguage);
+        readingLanguage.Enabled = settings.ReadingHotkeyEnabled;
         readingHotkey.ForeColor = settings.ReadingHotkeyEnabled ? Ui.Ink : Ui.Gray;
         tone.Select(settings.Tone);
         homeLanguage.Select(settings.HomeLanguage);
@@ -495,6 +501,7 @@ internal sealed class SettingsForm : Form
         Presets = presets.Select(row => new HotkeyPreset(row.Enabled.Checked, row.Hotkey.Draft,
             row.Language.SelectedValue as string ?? "en")).ToArray(),
         ReadingHotkeyEnabled = readingHotkeyEnabled.Checked, ReadingHotkey = readingHotkey.Draft,
+        ReadingTargetLanguage = readingLanguage.SelectedValue as string ?? original.ReadingTargetLanguage,
         Tone = tone.SelectedValue as string ?? "natural", HomeLanguage = homeLanguage.SelectedValue as string ?? "",
         BubbleTheme = bubbleTheme.SelectedValue as string ?? "light", BubblePosition = bubblePosition.SelectedValue as string ?? "mouse",
         WholeInputApps = wholeInputApps.ToArray(), UiLanguage = uiLanguage.SelectedValue as string ?? "",

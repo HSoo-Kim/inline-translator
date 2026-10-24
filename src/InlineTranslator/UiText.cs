@@ -51,10 +51,10 @@ public sealed class UiText
             ("내 언어와 단축키의 번역 언어 사이를 양방향으로 번역합니다.",
              "在“我的语言”和快捷键的目标语言之间双向翻译。",
              "「自分の言語」とショートカットの言語の間で双方向に翻訳します。"),
-        ["Selected text is translated into My language in a bubble. The original stays unchanged."] =
-            ("선택한 글을 내 언어로 번역해 말풍선에 표시합니다. 원문은 바뀌지 않습니다.",
-             "将选中文本译为“我的语言”，并显示在气泡中。原文保持不变。",
-             "選択した文章を「自分の言語」に訳して吹き出しで表示します。原文は変わりません。"),
+        ["Text in My language goes to the selected language; other text comes to My language. The original stays unchanged."] =
+            ("내 언어로 쓴 글은 선택한 언어로, 다른 언어의 글은 내 언어로 번역합니다. 원문은 바뀌지 않습니다.",
+             "我的语言写的文本译成所选语言，其他语言译成我的语言。原文保持不变。",
+             "自分の言語の文章は選択した言語に、その他の文章は自分の言語に翻訳します。原文は変わりません。"),
         ["Display language changes after Save. Reopen Settings to see it."] =
             ("저장하면 화면 언어가 바뀝니다. 설정을 다시 열면 적용됩니다.",
              "保存后更改界面语言。重新打开设置即可查看。",

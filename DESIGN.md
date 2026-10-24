@@ -11,7 +11,9 @@ No framework migration, glass effects, looping motion, or artificial delays.
 
 Three equal navigation tabs stay visible above the content:
 
-- Translation: My language, writing hotkeys and destinations, tone, reading hotkey.
+- Translation: My language, writing hotkeys and destinations, tone, reading hotkey
+  and its target language. Both modes send My language to the selected target,
+  and other languages to My language. Reading only shows a bubble, never pastes.
 - Engines: primary and fallback models, sign-in state, per-engine test results.
 - General: whole-input apps, bubble appearance/position, interface language,
   startup and updates.

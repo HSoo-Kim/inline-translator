@@ -69,6 +69,7 @@ public sealed record AppSettings
     public IReadOnlyList<HotkeyPreset> Presets { get; init; } = DefaultPresets;
     public bool ReadingHotkeyEnabled { get; init; } = true;
     public string ReadingHotkey { get; init; } = "Ctrl+Alt+R";
+    public string ReadingTargetLanguage { get; init; } = "";
     public string Tone { get; init; } = "natural";
     public string HomeLanguage { get; init; } = "";
     public IReadOnlyList<string> WholeInputApps { get; init; } = DefaultWholeInputApps;
@@ -123,6 +124,8 @@ public sealed record AppSettings
             Presets = presets,
             ReadingHotkeyEnabled = ReadingHotkeyEnabled && readingValid && !used.Contains(readingHotkey),
             ReadingHotkey = readingValid ? readingHotkey.ToString() : "",
+            ReadingTargetLanguage = Languages.Find(ReadingTargetLanguage)?.Code
+                ?? presets.FirstOrDefault(preset => preset.Enabled)?.TargetLanguage ?? presets[0].TargetLanguage,
             Tone = Tones.Contains(Tone) ? Tone : "natural",
             HomeLanguage = Languages.Find(HomeLanguage)?.Code ?? "",
             BubbleTheme = BubbleThemes.Contains(BubbleTheme) ? BubbleTheme : "light",

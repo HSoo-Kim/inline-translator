@@ -19,7 +19,7 @@ Now it is **one hotkey, right where you are typing**. In a few seconds your text
 |---|---|
 | 💬 In a chat input box, **just press `Ctrl+Alt+T`** | The **whole message** you typed is translated |
 | 🖱️ **Drag to select, then press `Ctrl+Alt+T`** | **Only the selection** is translated (chat, email, documents, anywhere) |
-| **Select text, then press `Ctrl+Alt+R`** | Translate into **My language**, showing a bubble without changing the original |
+| **Select text, then press `Ctrl+Alt+R`** | **Two-way reading translation**, showing a bubble without changing the original |
 | **Press `Esc` while translating** | Cancel the current translation |
 
 - Two to four seconds later the translation replaces your text. Don't like it? `Ctrl+Z`.
@@ -39,7 +39,7 @@ Now it is **one hotkey, right where you are typing**. In a few seconds your text
 - **Tone** — match the original, casual, or polite.
 - **Read-only text pops up** — select text you cannot edit (a received message, a web page, a PDF) and press the hotkey: the translation appears in a small bubble that disappears on any key or click. Choose black-on-white or white-on-black, and whether it follows the mouse (default) or stays right above/below the selection.
 - **Protect ongoing edits** — typing or clicking to move the cursor while translating prevents replacement; the result appears in a bubble instead. The selection is checked again before pasting. Whole-input translation never selects everything again and overwrites newly typed text.
-- **Reading shortcut** — `Ctrl+Alt+R` always translates selected text into "My language" and only shows a bubble, without guessing whether the app is editable or attempting to paste. Change or disable it in Settings.
+- **Reading shortcut** — `Ctrl+Alt+R` works both ways too. Text in My language goes to the reading shortcut's selected language; other text comes to My language. It only shows a bubble and never pastes. Choose its target language and hotkey, or disable it, in Settings.
 - **Esc to cancel** — while translating, `Esc` stops the running engine without starting the fallback or logging an error. After translation, Esc works normally in the foreground app again.
 - **Nothing recorded** — translated text is never written to disk or to Windows clipboard history (`Win+V`).
 - **One-click update** — when a new version is out, an `Update` button appears in the tray menu and Settings. Click it to download, replace and restart.

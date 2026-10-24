@@ -37,6 +37,7 @@ internal static class Program
             ("prompts name the target and stay shell-safe for every language", Prompts),
             ("capture uses selection first and whole input only in listed apps", CaptureRules),
             ("reading hotkey normalizes and persists without conflicting with presets", ReadingHotkey),
+            ("reading translation follows its selected language in both directions", ReadingDirection),
             ("input protection rejects changed or missing selections and meaningful input", InputProtection),
             ("cancellation stops primary and fallback without delivering a result", TranslationCancellation),
             ("translator uses primary, then fallback, and reports both failures", TranslatorFallback),
@@ -224,6 +225,7 @@ internal static class Program
             copied with { Presets = original.Presets.Select((preset, i) => i == 0 ? preset with { Hotkey = "Ctrl+Alt+E" } : preset).ToArray() },
             copied with { ReadingHotkeyEnabled = false },
             copied with { ReadingHotkey = "Ctrl+Alt+F" },
+            copied with { ReadingTargetLanguage = "ja" },
             copied with { Tone = "formal" },
             copied with { HomeLanguage = "ko" },
             copied with { WholeInputApps = ["Telegram"] },
@@ -379,22 +381,36 @@ internal static class Program
         Check(disabledPreset.ReadingHotkeyEnabled, "disabled preset does not claim its key");
         Equal("Ctrl+Alt+J", disabledPreset.ReadingHotkey);
         string path = Path.Combine(TestDirectory, "reading.json");
-        SettingsStore.Save(path, disabledPreset with { ReadingHotkeyEnabled = false });
+        SettingsStore.Save(path, disabledPreset with { ReadingHotkeyEnabled = false, ReadingTargetLanguage = "ja" });
         var loaded = SettingsStore.Load(path)!;
         Equal("Ctrl+Alt+J", loaded.ReadingHotkey);
+        Equal("ja", loaded.ReadingTargetLanguage);
         Check(!loaded.ReadingHotkeyEnabled, "disabled choice survives saving");
         File.WriteAllText(path, "{}");
         Check(SettingsStore.Load(path)!.ReadingHotkeyEnabled, "old settings receive reading default");
+        Equal("en", SettingsStore.Load(path)!.ReadingTargetLanguage);
         Equal(CaptureMode.NeedSelection, Capture.Decide(false, "Telegram", AppSettings.DefaultWholeInputApps, reading: true));
         Equal(CaptureMode.Selection, Capture.Decide(true, "Telegram", AppSettings.DefaultWholeInputApps, reading: true));
-        foreach (string original in new[] { "Hello", "안녕", "こんにちは" })
+    }
+
+    private static void ReadingDirection()
+    {
+        var inherited = new AppSettings { Presets = [new(true, "Ctrl+Alt+T", "ja")] }.Normalize();
+        Equal("ja", inherited.ReadingTargetLanguage);
+        Equal("ja", (inherited with { ReadingTargetLanguage = "xx" }).Normalize().ReadingTargetLanguage);
+        Equal("fr", (inherited with { ReadingTargetLanguage = "fr" }).Normalize().ReadingTargetLanguage);
+        foreach (var (original, output) in new[] { ("Hello", "ko"), ("안녕", "en"), ("こんにちは", "ko") })
         {
-            var home = Languages.Find("ko")!;
+            var settings = new AppSettings { HomeLanguage = "ko", ReadingTargetLanguage = "en" }.Normalize();
             var result = new Translator((_, _, _, _) => Task.FromResult("안녕"))
-                .TranslateAsync(new AppSettings { HomeLanguage = "ko" }, home, original, CancellationToken.None)
+                .TranslateAsync(settings, Languages.Find(settings.ReadingTargetLanguage)!, original, CancellationToken.None)
                 .GetAwaiter().GetResult();
-            Equal(home, result.Output);
+            Equal(output, result.Output?.Code);
         }
+        var japanese = new Translator((_, _, _, _) => Task.FromResult("こんにちは"))
+            .TranslateAsync(inherited with { HomeLanguage = "ko" }, Languages.Find(inherited.ReadingTargetLanguage)!,
+                "안녕하세요", CancellationToken.None).GetAwaiter().GetResult();
+        Equal("ja", japanese.Output?.Code);
     }
 
     private static void InputProtection()
@@ -657,7 +673,7 @@ internal static class Program
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://github.com/a","assets":[{"name":"inline-translator-win-x64.zip","browser_download_url":"https://github.com/x"}]}""")!.PackageUrl is null, "no digest means no automatic install");
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://evil.example/"}""") is null, "non-GitHub page rejected");
         Check(Parse("""{"tag_name":"latest","html_url":"https://github.com/a"}""") is null, "non-version tag rejected");
-        Equal(new Version(0, 1, 12), UpdateChecker.Current);
+        Equal(new Version(0, 1, 13), UpdateChecker.Current);
         Equal(300000, UpdateChecker.CheckIntervalMilliseconds);
     }
 

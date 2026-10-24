@@ -173,7 +173,7 @@ internal sealed class TrayApp : ApplicationContext
         if (busy || installing) return;
         if (reading ? !settings.ReadingHotkeyEnabled : presetIndex < 0 || presetIndex >= settings.Presets.Count) return;
         var preset = reading ? null : settings.Presets[presetIndex];
-        var target = reading ? Languages.Home(settings.HomeLanguage) : Languages.Find(preset!.TargetLanguage);
+        var target = Languages.Find(reading ? settings.ReadingTargetLanguage : preset!.TargetLanguage);
         if ((!reading && !preset!.Enabled) || target is null) return;
         busy = true;
         ClipboardSnapshot? snapshot = null;
