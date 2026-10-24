@@ -59,6 +59,8 @@ Built for Windows 11 x64. The executable includes .NET, so nothing else to insta
 
 ## Settings
 
+Updates are checked at startup, every five minutes, and when opening Settings or the tray menu. Use **General → Check for updates** or the tray's **Check for updates** action to check immediately, even with automatic checks disabled. Settings show progress, current/new version and errors directly.
+
 Drag the window borders to resize Settings, or maximize it. On small or remote desktops, scroll the content while Save and Cancel stay fixed at the bottom. Resolution or scaling changes keep the window within the current working area.
 
 Three tabs organize settings: Translation, Engines and General. Switching tabs keeps pending edits. Narrow windows stack fields without horizontal scrolling. Hotkey errors appear under the field; each engine has its own test progress and result. Save enables only when settings have changed and validation passes.

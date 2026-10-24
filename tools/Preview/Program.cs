@@ -10,12 +10,39 @@ internal static class Program
     private static int Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        if (args is ["check-update"])
+        {
+            try
+            {
+                var release = UpdateChecker.FetchLatestAsync(CancellationToken.None).GetAwaiter().GetResult();
+                Console.WriteLine($"current={UpdateChecker.Current} latest={release?.Tag ?? "none"} package={release?.PackageUrl} verified={release?.PackageSha256 is not null}");
+                return 0;
+            }
+            catch (Exception error) { Console.Error.WriteLine(error); return 1; }
+        }
+        if (args is ["install-update", var target])
+        {
+            try
+            {
+                target = Path.GetFullPath(target);
+                if (!File.Exists(target) || Path.GetFileName(target) != UpdateChecker.ExecutableName)
+                    throw new ArgumentException("Choose an existing InlineTranslator.exe.");
+                var release = UpdateChecker.FetchLatestAsync(CancellationToken.None).GetAwaiter().GetResult()
+                    ?? throw new InvalidDataException("No valid release metadata.");
+                UpdateInstaller.InstallAsync(release, target, UpdateInstaller.DownloadAsync, CancellationToken.None).GetAwaiter().GetResult();
+                Console.WriteLine("installed=" + FileVersionInfo.GetVersionInfo(target).ProductVersion);
+                return 0;
+            }
+            catch (Exception error) { Console.Error.WriteLine(error); return 1; }
+        }
         if (args is ["render", var folder])
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => RenderAsync(folder)) : 2;
         if (args is ["verify"])
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(OperationQa.VerifyAsync) : 2;
         if (args is ["window-check", var windowFolder])
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => WindowQa.VerifyAsync(windowFolder)) : 2;
+        if (args is ["recovery-check", var recoveryFolder])
+            return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => RecoveryQa.VerifyAsync(recoveryFolder)) : 2;
         if (args is ["lnk", var shortcut])
         {
             try { Console.WriteLine("target: " + AppCatalog.ShortcutTarget(shortcut)); }
@@ -113,7 +140,8 @@ internal static class Program
             var settings = new AppSettings { UiLanguage = language }.Normalize();
             var text = new UiText(language);
             using var icon = AppIcon.Load();
-            using var form = new SettingsForm(settings, text, icon, null, _ => [], () => Task.CompletedTask, _ => { });
+            using var form = new SettingsForm(settings, text, icon, null, _ => [], () => Task.CompletedTask, _ => { },
+                checkUpdates: () => Task.CompletedTask);
             await ShowAsync(form);
             await form.InitialSignIn.WaitAsync(QaTimeout);
             form.PerformLayout();
@@ -185,6 +213,8 @@ internal static class Program
         }
         await WindowQa.VerifyAsync(Path.Combine(artifacts, "window-qa"));
         await SettingsQa.VerifyAsync(Path.Combine(artifacts, "settings-qa"));
+        await UpdateQa.VerifyAsync(Path.Combine(artifacts, "update-qa"));
+        await RecoveryQa.VerifyAsync(Path.Combine(artifacts, "recovery-qa"));
     }
 
     private static int Translate(string provider, string model, string language, string message)

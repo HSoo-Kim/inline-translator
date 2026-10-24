@@ -82,6 +82,11 @@ public sealed class UiText
         ["Exit"] = ("종료", "退出", "終了"),
         ["Update to {0}"] = ("{0}(으)로 업데이트", "更新到 {0}", "{0} に更新"),
         ["Update"] = ("업데이트", "更新", "更新"),
+        ["Check for updates"] = ("지금 업데이트 확인", "立即检查更新", "今すぐ更新を確認"),
+        ["Checking for updates…"] = ("업데이트 확인 중…", "正在检查更新…", "更新を確認中…"),
+        ["Update available: {0}."] = ("새 버전 {0}을 설치할 수 있습니다.", "新版本 {0} 可供安装。", "新しいバージョン {0} をインストールできます。"),
+        ["You are using the latest version ({0})."] = ("최신 버전입니다({0}).", "当前已是最新版本（{0}）。", "最新バージョンです（{0}）。"),
+        ["Update check failed: {0}"] = ("업데이트 확인 실패: {0}", "检查更新失败：{0}", "更新の確認に失敗：{0}"),
         ["Languages and tone"] = ("언어와 말투", "语言与语气", "言語とトーン"),
         ["{0} is already used by another program. Choose another hotkey in Settings."] =
             ("{0}을(를) 다른 프로그램이 이미 쓰고 있습니다. 설정에서 다른 단축키를 고르세요.",

@@ -10,7 +10,8 @@ internal static class WindowQa
             var settings = new AppSettings { UiLanguage = language }.Normalize();
             var text = new UiText(language);
             using var icon = AppIcon.Load();
-            using var form = new SettingsForm(settings, text, icon, null, _ => [], () => Task.CompletedTask, _ => { });
+            using var form = new SettingsForm(settings, text, icon, null, _ => [], () => Task.CompletedTask, _ => { },
+                checkUpdates: () => Task.CompletedTask);
             await Program.ShowAsync(form);
             await form.InitialSignIn.WaitAsync(Program.QaTimeout);
             var area = Screen.FromControl(form).WorkingArea;

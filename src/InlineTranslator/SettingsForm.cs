@@ -34,6 +34,8 @@ internal sealed class SettingsForm : Form
     private readonly PillButton saveButton;
     private readonly Label saveError;
     private readonly PillButton updateButton = new("", PillKind.Soft) { Visible = false, Name = "update" };
+    private readonly PillButton checkUpdateButton = new("", PillKind.Soft) { Name = "check-update" };
+    private readonly Label updateStatus = new() { AutoSize = true, Visible = false, Name = "update-status", ForeColor = Ui.Muted };
     private readonly ToolTip tips = new();
     private bool loading = true, reflowing, sizingTabs;
 
@@ -47,7 +49,7 @@ internal sealed class SettingsForm : Form
 
     public SettingsForm(AppSettings settings, UiText text, Icon icon, ReleaseInfo? update,
         Func<AppSettings, IReadOnlyList<string>> save, Func<Task> installUpdate, Action<string> changeLanguage,
-        EngineRun? testRun = null)
+        EngineRun? testRun = null, Func<Task>? checkUpdates = null)
     {
         this.text = text;
         original = settings;
@@ -182,6 +184,18 @@ internal sealed class SettingsForm : Form
         preferences.Controls.Add(startWithWindows);
         preferences.Controls.Add(checkForUpdates);
         preferences.Controls.Add(autoInstall);
+        checkUpdateButton.Text = text.T("Check for updates");
+        checkUpdateButton.AccessibleName = checkUpdateButton.Text;
+        checkUpdateButton.Visible = checkUpdates is not null;
+        checkUpdateButton.Click += async (_, _) =>
+        {
+            SetUpdateCheckStatus(text.T("Checking for updates…"), checking: true);
+            if (SelectedTabId == "general") ActiveScroller.ScrollControlIntoView(updateStatus);
+            await checkUpdates!();
+            if (!IsDisposed && SelectedTabId == "general") ActiveScroller.ScrollControlIntoView(updateStatus);
+        };
+        preferences.Controls.Add(checkUpdateButton);
+        preferences.Controls.Add(updateStatus);
         general.Controls.Add(preferences);
 
         var header = new Panel { Dock = DockStyle.Top, Height = 56, BackColor = Ui.Canvas };
@@ -285,6 +299,15 @@ internal sealed class SettingsForm : Form
             tips.SetToolTip(updateButton, text.T("Update to {0}", release.Tag));
         }
         updateButton.Parent?.PerformLayout();
+    }
+
+    internal void SetUpdateCheckStatus(string message, bool checking = false, bool error = false)
+    {
+        checkUpdateButton.Enabled = !checking;
+        updateStatus.Text = message;
+        updateStatus.ForeColor = error ? Ui.Red : Ui.Muted;
+        updateStatus.Visible = true;
+        ReflowPages();
     }
 
     protected override void OnHandleCreated(EventArgs e)

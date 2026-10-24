@@ -12,6 +12,7 @@ public static class UpdateChecker
     private const string LatestReleaseApi = "https://api.github.com/repos/HSoo-Kim/inline-translator/releases/latest";
     public const string PackageName = "inline-translator-win-x64.zip";
     public const string ExecutableName = "InlineTranslator.exe";
+    public const int CheckIntervalMilliseconds = 5 * 60 * 1000;
 
     public static Version Current => Normalize(typeof(UpdateChecker).Assembly.GetName().Version ?? new Version(0, 0, 0));
 

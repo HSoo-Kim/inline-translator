@@ -17,8 +17,10 @@ internal sealed class TrayApp : ApplicationContext
     private readonly BusyIndicator indicator = new();
     private readonly TranslationBubble bubble = new();
     private readonly Translator translator = new(EngineCli.TranslateAsync);
-    private readonly System.Windows.Forms.Timer updateTimer = new() { Interval = (int)TimeSpan.FromHours(24).TotalMilliseconds };
+    private readonly System.Windows.Forms.Timer updateTimer = new() { Interval = UpdateChecker.CheckIntervalMilliseconds };
+    private readonly Func<CancellationToken, Task<ReleaseInfo?>> fetchUpdate;
     private readonly ToolStripMenuItem updateItem = new() { Visible = false };
+    private readonly ToolStripMenuItem checkUpdatesItem = new() { Name = "check-updates" };
     private readonly ToolStripMenuItem settingsItem = new();
     private readonly ToolStripMenuItem pauseItem = new() { CheckOnClick = true };
     private readonly ToolStripMenuItem languageItem = new();
@@ -27,14 +29,19 @@ internal sealed class TrayApp : ApplicationContext
     private AppSettings settings;
     private SettingsForm? settingsForm;
     private ReleaseInfo? update;
-    private bool busy, installing;
+    private bool busy, installing, checkingUpdates;
+    internal Task CurrentUpdateCheck { get; private set; } = Task.CompletedTask;
+    internal ContextMenuStrip TrayMenu => tray.ContextMenuStrip!;
+    internal SettingsForm? SettingsWindow => settingsForm;
     private Action? balloonAction;
     private readonly HashSet<Provider> signInReminded = [];
 
-    public TrayApp(string settingsPath, AppSettings settings, bool firstRun, uint activationMessage)
+    public TrayApp(string settingsPath, AppSettings settings, bool firstRun, uint activationMessage,
+        Func<CancellationToken, Task<ReleaseInfo?>>? fetchUpdate = null)
     {
         this.settingsPath = settingsPath;
         this.settings = settings;
+        this.fetchUpdate = fetchUpdate ?? UpdateChecker.FetchLatestAsync;
         text = new UiText(settings.UiLanguage);
         hotkeys = new HotkeyWindow(activationMessage);
         hotkeys.HotkeyPressed += id => _ = TranslateActiveAsync(id - 1, reading: id == ReadingHotkeyId);
@@ -42,7 +49,8 @@ internal sealed class TrayApp : ApplicationContext
 
         var menu = new ContextMenuStrip { Renderer = new RoundMenuRenderer(), Font = Ui.Regular() };
         menu.Opened += (_, _) => Ui.RoundWindow(menu);
-        menu.Items.AddRange([titleItem, new ToolStripSeparator(), updateItem, settingsItem, languageItem, pauseItem, new ToolStripSeparator(), exitItem]);
+        menu.Opening += (_, _) => _ = RequestUpdateCheck();
+        menu.Items.AddRange([titleItem, new ToolStripSeparator(), updateItem, checkUpdatesItem, settingsItem, languageItem, pauseItem, new ToolStripSeparator(), exitItem]);
         foreach (var (code, name) in SettingsForm.DisplayLanguages)
         {
             var item = new ToolStripMenuItem(name) { Tag = code };
@@ -50,6 +58,7 @@ internal sealed class TrayApp : ApplicationContext
             languageItem.DropDownItems.Add(item);
         }
         updateItem.Click += async (_, _) => await InstallUpdateAsync();
+        checkUpdatesItem.Click += async (_, _) => await RequestUpdateCheck(manual: true);
         settingsItem.Click += (_, _) => ShowSettings();
         pauseItem.CheckedChanged += (_, _) => ApplyHotkeys(notify: true);
         exitItem.Click += (_, _) => ExitThread();
@@ -64,9 +73,9 @@ internal sealed class TrayApp : ApplicationContext
 
         RefreshTexts();
         ApplyHotkeys(notify: true);
-        updateTimer.Tick += async (_, _) => await CheckForUpdateAsync();
+        updateTimer.Tick += async (_, _) => await RequestUpdateCheck();
         updateTimer.Start();
-        _ = CheckForUpdateAsync();
+        _ = RequestUpdateCheck();
         if (firstRun)
         {
             Notify(text.T("Inline Translator is running in the notification area. Select text and press {0}.", FirstHotkey()), ToolTipIcon.Info);
@@ -80,6 +89,7 @@ internal sealed class TrayApp : ApplicationContext
     {
         titleItem.Text = $"Inline Translator {UpdateChecker.Current.ToString(3)}";
         settingsItem.Text = text.T("Settings…");
+        checkUpdatesItem.Text = text.T(checkingUpdates ? "Checking for updates…" : "Check for updates");
         pauseItem.Text = text.T("Pause hotkeys");
         exitItem.Text = text.T("Exit");
         languageItem.Text = SettingsForm.LanguageLabel(text);
@@ -117,17 +127,20 @@ internal sealed class TrayApp : ApplicationContext
         return failed;
     }
 
-    private void ShowSettings()
+    internal void ShowSettings()
     {
         if (settingsForm is { IsDisposed: false })
         {
             settingsForm.Activate();
+            _ = RequestUpdateCheck();
             return;
         }
-        settingsForm = new SettingsForm(settings, text, icon, update, SaveSettings, InstallUpdateAsync, ChangeDisplayLanguage);
+        settingsForm = new SettingsForm(settings, text, icon, update, SaveSettings, InstallUpdateAsync, ChangeDisplayLanguage,
+            checkUpdates: () => RequestUpdateCheck(manual: true));
         settingsForm.FormClosed += (_, _) => settingsForm = null;
         settingsForm.Show();
         settingsForm.Activate();
+        _ = RequestUpdateCheck();
     }
 
     private void ChangeDisplayLanguage(string code)
@@ -151,8 +164,7 @@ internal sealed class TrayApp : ApplicationContext
         settings = updated.Normalize();
         SettingsStore.Save(settingsPath, settings);
         text.SetLanguage(settings.UiLanguage);
-        if (settings.CheckForUpdates) _ = CheckForUpdateAsync();
-        else ShowUpdate(null);
+        if (settings.CheckForUpdates) _ = RequestUpdateCheck();
         return ApplyHotkeys(notify: false);
     }
 
@@ -328,18 +340,45 @@ internal sealed class TrayApp : ApplicationContext
         catch (System.Runtime.InteropServices.ExternalException error) { ErrorLog.Write("Could not restore the clipboard", error); }
     }
 
-    private async Task CheckForUpdateAsync()
+    private Task RequestUpdateCheck(bool manual = false)
     {
-        if (!settings.CheckForUpdates) return;
+        if (checkingUpdates)
+        {
+            settingsForm?.SetUpdateCheckStatus(text.T("Checking for updates…"), checking: true);
+            return CurrentUpdateCheck;
+        }
+        return CurrentUpdateCheck = CheckForUpdateAsync(manual);
+    }
+
+    private async Task CheckForUpdateAsync(bool manual)
+    {
+        if ((!manual && !settings.CheckForUpdates) || installing) return;
+        checkingUpdates = true;
+        checkUpdatesItem.Enabled = false;
+        checkUpdatesItem.Text = text.T("Checking for updates…");
+        settingsForm?.SetUpdateCheckStatus(text.T("Checking for updates…"), checking: true);
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            var latest = await UpdateChecker.FetchLatestAsync(timeout.Token);
+            var latest = await fetchUpdate(timeout.Token);
             ShowUpdate(latest is not null && latest.Version > UpdateChecker.Current ? latest : null);
+            string message = update is not null ? text.T("Update available: {0}.", update.Tag)
+                : text.T("You are using the latest version ({0}).", UpdateChecker.Current.ToString(3));
+            settingsForm?.SetUpdateCheckStatus(message);
+            if (manual && settingsForm is null) Notify(message, ToolTipIcon.Info);
         }
         catch (Exception error) when (error is HttpRequestException or OperationCanceledException or System.Text.Json.JsonException or IOException)
         {
             ErrorLog.Write("Update check failed", error);
+            string message = text.T("Update check failed: {0}", error.Message);
+            settingsForm?.SetUpdateCheckStatus(message, error: true);
+            if (manual && settingsForm is null) Notify(message, ToolTipIcon.Warning);
+        }
+        finally
+        {
+            checkingUpdates = false;
+            checkUpdatesItem.Text = text.T("Check for updates");
+            checkUpdatesItem.Enabled = !installing;
         }
     }
 
@@ -363,6 +402,7 @@ internal sealed class TrayApp : ApplicationContext
             return;
         }
         installing = true;
+        checkUpdatesItem.Enabled = false;
         try
         {
             Notify(text.T("Updating to {0}…", update.Tag), ToolTipIcon.Info);
@@ -379,6 +419,7 @@ internal sealed class TrayApp : ApplicationContext
         finally
         {
             installing = false;
+            checkUpdatesItem.Enabled = !checkingUpdates;
         }
     }
 

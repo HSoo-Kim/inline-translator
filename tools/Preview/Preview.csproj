@@ -8,7 +8,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationDefaultFont>Segoe UI, 9.5pt</ApplicationDefaultFont>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Version>0.1.10</Version>
+    <Version>0.1.11</Version>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/InlineTranslator/*.cs" Exclude="../../src/InlineTranslator/Program.cs" />
