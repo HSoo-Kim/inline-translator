@@ -43,7 +43,7 @@ Now it is **one hotkey, right where you are typing**. In a few seconds your text
 - **Esc to cancel** — while translating, `Esc` stops the running engine without starting the fallback or logging an error. After translation, Esc works normally in the foreground app again.
 - **Nothing recorded** — translated text is never written to disk or to Windows clipboard history (`Win+V`).
 - **One-click update** — when a new version is out, an `Update` button appears in the tray menu and Settings. Click it to download, replace and restart.
-- **Interface languages** — 한국어, English, 简体中文, 日本語. Switch at the top of Settings or from the tray menu.
+- **Interface languages** — 한국어, English, 简体中文, 日本語. Save a choice in General or switch from the tray menu.
 
 ## Getting started
 
@@ -51,7 +51,7 @@ Now it is **one hotkey, right where you are typing**. In a few seconds your text
    - [Claude Code](https://docs.anthropic.com/en/docs/claude-code): install, run `claude` in a terminal and sign in
    - [Codex CLI](https://github.com/openai/codex): install, then `codex login`
 2. **[Download the latest release](https://github.com/HSoo-Kim/inline-translator/releases/latest)**, unzip `inline-translator-win-x64.zip` and run `InlineTranslator.exe`.
-3. Settings open on first launch. Press `Test` next to an engine to check it works, then `Save`.
+3. Settings open on first launch. Use `Test` in Engines, choose languages and hotkeys in Translation, then `Save`.
 
 From then on it runs quietly in the notification area. Click the icon for Settings; right-click to pause or exit.
 
@@ -61,16 +61,17 @@ Built for Windows 11 x64. The executable includes .NET, so nothing else to insta
 
 Drag the window borders to resize Settings, or maximize it. On small or remote desktops, scroll the content while Save and Cancel stay fixed at the bottom. Resolution or scaling changes keep the window within the current working area.
 
+Three tabs organize settings: Translation, Engines and General. Switching tabs keeps pending edits. Narrow windows stack fields without horizontal scrolling. Hotkey errors appear under the field; each engine has its own test progress and result. Save enables only when settings have changed and validation passes.
+
 <p align="center"><img src="docs/images/settings-en.png" width="520" alt="Inline Translator settings window"></p>
 
-| Section | What it does |
+| Tab | Contents |
 |---|---|
-| Translation engine | Main engine and the one to use if it fails. Pick a model from the list or type its name. |
-| Hotkeys and target languages | Click a hotkey box and press the combination you want. |
-| Read-only translation hotkey | Default `Ctrl+Alt+R`. Translate selected text into My language and display a bubble. |
-| Apps that translate the whole input box | In these apps the hotkey works without selecting. Default: Telegram, KakaoTalk, Slack, Discord, WhatsApp, LINE, Teams, Signal |
-| Display language | Language of the app itself; applies immediately. |
-| General | Start with Windows, update checks |
+| Translation | My language, writing hotkeys and target languages, tone, reading shortcut (`Ctrl+Alt+R`) |
+| Engines | Primary and fallback providers/models, sign-in status, individual translation tests |
+| General | Whole-input apps, bubble appearance/position, interface language, startup, updates |
+
+Interface language applies with Save rather than discarding other edits when a language is selected.
 
 ## Data and privacy
 

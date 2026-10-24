@@ -16,6 +16,33 @@ public sealed record EngineChoice(Provider Provider, string Model)
 
 public sealed record HotkeyPreset(bool Enabled, string Hotkey, string TargetLanguage);
 
+public enum HotkeyProblem { Missing, Invalid, Duplicate }
+
+public static class SettingsValidation
+{
+    // Reading uses the index immediately after the three writing presets.
+    public static IReadOnlyDictionary<int, HotkeyProblem> HotkeyErrors(AppSettings settings)
+    {
+        var errors = new Dictionary<int, HotkeyProblem>();
+        var used = new Dictionary<Hotkey, int>();
+        var entries = settings.Presets.Select((preset, index) => (index, preset.Enabled, preset.Hotkey))
+            .Append((AppSettings.PresetCount, settings.ReadingHotkeyEnabled, settings.ReadingHotkey));
+        foreach (var (index, enabled, value) in entries)
+        {
+            if (!enabled) continue;
+            if (string.IsNullOrWhiteSpace(value)) errors[index] = HotkeyProblem.Missing;
+            else if (!Hotkey.TryParse(value, out var hotkey)) errors[index] = HotkeyProblem.Invalid;
+            else if (used.TryGetValue(hotkey, out int previous))
+            {
+                errors[index] = HotkeyProblem.Duplicate;
+                errors[previous] = HotkeyProblem.Duplicate;
+            }
+            else used.Add(hotkey, index);
+        }
+        return errors;
+    }
+}
+
 public sealed record AppSettings
 {
     public const int PresetCount = 3;
@@ -126,6 +153,9 @@ public static class SettingsStore
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "InlineTranslator", "settings.json");
 
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+
+    public static bool Equivalent(AppSettings first, AppSettings second) =>
+        JsonSerializer.Serialize(first, Options) == JsonSerializer.Serialize(second, Options);
 
     public static AppSettings? Load(string path)
     {

@@ -103,15 +103,6 @@ internal static class Program
         Console.WriteLine($"{path} {form.Width}x{form.Height}");
     }
 
-    private static IEnumerable<Control> Descendants(Control parent)
-    {
-        foreach (Control child in parent.Controls)
-        {
-            yield return child;
-            foreach (var descendant in Descendants(child)) yield return descendant;
-        }
-    }
-
     private static async Task RenderAsync(string folder)
     {
         Directory.CreateDirectory(folder);
@@ -126,18 +117,19 @@ internal static class Program
             await ShowAsync(form);
             await form.InitialSignIn.WaitAsync(QaTimeout);
             form.PerformLayout();
-            var scroller = form.Controls.OfType<Panel>().Single(panel => panel.AutoScroll);
-            scroller.AutoScrollPosition = Point.Empty;
-            Capture(form, Path.Combine(folder, $"settings-{language}.png"));
-
-            // Include the reading shortcut even when it falls between the two viewport ends.
-            var reading = Descendants(scroller).Single(control => control.Text == text.T("Read-only translation hotkey"));
-            int readingY = scroller.PointToClient(reading.PointToScreen(Point.Empty)).Y;
-            scroller.AutoScrollPosition = new Point(0, readingY + -scroller.AutoScrollPosition.Y - 12);
-            Capture(form, Path.Combine(folder, $"settings-{language}-reading.png"));
-
-            scroller.AutoScrollPosition = new Point(0, scroller.DisplayRectangle.Height);
-            Capture(form, Path.Combine(folder, $"settings-{language}-end.png"));
+            foreach (string tab in form.TabIds)
+            {
+                form.SelectTab(tab);
+                form.PerformLayout();
+                var scroller = form.ActiveScroller;
+                scroller.AutoScrollPosition = Point.Empty;
+                Capture(form, Path.Combine(folder, $"settings-{language}-{tab}.png"));
+                if (tab == "translation") Capture(form, Path.Combine(folder, $"settings-{language}.png"));
+                scroller.AutoScrollPosition = new Point(0, scroller.DisplayRectangle.Height);
+                Capture(form, Path.Combine(folder, $"settings-{language}-{tab}-end.png"));
+                if (tab == "translation") Capture(form, Path.Combine(folder, $"settings-{language}-reading.png"));
+                if (tab == "general") Capture(form, Path.Combine(folder, $"settings-{language}-end.png"));
+            }
             form.Close();
         }
         var korean = new UiText("ko");
@@ -192,6 +184,7 @@ internal static class Program
             Capture(picker, Path.Combine(artifacts, "app-picker-ko.png"));
         }
         await WindowQa.VerifyAsync(Path.Combine(artifacts, "window-qa"));
+        await SettingsQa.VerifyAsync(Path.Combine(artifacts, "settings-qa"));
     }
 
     private static int Translate(string provider, string model, string language, string message)

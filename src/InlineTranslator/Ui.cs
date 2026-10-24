@@ -16,6 +16,7 @@ internal static class Ui
     public static readonly Color Soft = Color.FromArgb(241, 243, 247);
     public static readonly Color SoftHover = Color.FromArgb(229, 233, 240);
     public static readonly Color Green = Color.FromArgb(22, 163, 74);
+    public static readonly Color GreenInk = Color.FromArgb(21, 128, 61);
     public static readonly Color GreenSoft = Color.FromArgb(232, 247, 238);
     public static readonly Color Red = Color.FromArgb(220, 38, 38);
     public static readonly Color RedSoft = Color.FromArgb(253, 236, 236);
@@ -176,6 +177,9 @@ internal sealed class PillButton : Button
 
 internal sealed class ToggleSwitch : CheckBox
 {
+    [DefaultValue(false)]
+    public bool WrapText { get; set; }
+
     public ToggleSwitch(string text)
     {
         Text = text;
@@ -191,8 +195,16 @@ internal sealed class ToggleSwitch : CheckBox
 
     public override Size GetPreferredSize(Size proposedSize)
     {
-        var text = TextRenderer.MeasureText(Text, Font, Size.Empty, TextFormatFlags.SingleLine);
         int track = Ui.Scale(this, 38);
+        if (WrapText && proposedSize.Width > 0)
+        {
+            int gap = Ui.Scale(this, 12);
+            int width = Math.Max(1, proposedSize.Width - track - gap);
+            var wrapped = TextRenderer.MeasureText(Text, Font, new Size(width, int.MaxValue),
+                TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+            return new Size(proposedSize.Width, Math.Max(Ui.Scale(this, 26), wrapped.Height + Ui.Scale(this, 8)));
+        }
+        var text = TextRenderer.MeasureText(Text, Font, Size.Empty, TextFormatFlags.SingleLine);
         return new Size(track + (Text.Length > 0 ? Ui.Scale(this, 10) + text.Width : 0), Math.Max(Ui.Scale(this, 26), text.Height + 4));
     }
 
@@ -231,7 +243,8 @@ internal sealed class ToggleSwitch : CheckBox
         if (Text.Length == 0) return;
         var textBounds = new Rectangle(w + Ui.Scale(this, 10), 0, Width - w - Ui.Scale(this, 10), Height);
         TextRenderer.DrawText(g, Text, Font, textBounds, Enabled ? ForeColor : Ui.Gray,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.SingleLine);
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix
+            | (WrapText ? TextFormatFlags.WordBreak : TextFormatFlags.SingleLine));
     }
 }
 
@@ -245,6 +258,8 @@ internal sealed class PillDropdown : Control
     private string customLabel = "";
 
     public event Action? SelectionChanged;
+    [DefaultValue(false)]
+    public bool WrapText { get; set; }
 
     public PillDropdown(int width)
     {
@@ -266,6 +281,18 @@ internal sealed class PillDropdown : Control
     public object? SelectedValue => selected >= 0 ? options[selected].Value : null;
     public int SelectedIndex => selected;
 
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        if (!WrapText) return base.GetPreferredSize(proposedSize);
+        int width = proposedSize.Width > 0 ? proposedSize.Width : Width;
+        int padding = Ui.Scale(this, 12), chevron = Ui.Scale(this, 10);
+        string label = selected >= 0 ? options[selected].Label : "";
+        var measured = TextRenderer.MeasureText(label, Font,
+            new Size(Math.Max(1, width - padding * 2 - chevron), int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+        return new Size(width, Math.Max(Ui.Scale(this, 36), measured.Height + Ui.Scale(this, 16)));
+    }
+
     public void SetOptions(IEnumerable<(object Value, string Label)> items)
     {
         options.Clear();
@@ -282,6 +309,7 @@ internal sealed class PillDropdown : Control
 
     public void Select(object value)
     {
+        object? previous = SelectedValue;
         int index = options.FindIndex(option => Equals(option.Value, value));
         if (index < 0)
         {
@@ -290,12 +318,15 @@ internal sealed class PillDropdown : Control
         }
         selected = index;
         Invalidate();
+        if (!Equals(previous, SelectedValue)) SelectionChanged?.Invoke();
     }
 
     public void SelectIndex(int index)
     {
+        int previous = selected;
         selected = Math.Clamp(index, -1, options.Count - 1);
         Invalidate();
+        if (previous != selected) SelectionChanged?.Invoke();
     }
 
     private void Choose(int index)
@@ -326,7 +357,6 @@ internal sealed class PillDropdown : Control
                 if (customPrompt() is { Length: > 0 } value)
                 {
                     Select(value);
-                    SelectionChanged?.Invoke();
                 }
             };
             menu.Items.Add(custom);
@@ -361,7 +391,8 @@ internal sealed class PillDropdown : Control
         string label = selected >= 0 ? options[selected].Label : "";
         var textBounds = new Rectangle(pad, 0, Width - pad * 2 - chevron, Height);
         TextRenderer.DrawText(g, label, Font, textBounds, Enabled ? ForeColor : Ui.Gray,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPrefix
+            | (WrapText ? TextFormatFlags.WordBreak : TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis));
         float cx = Width - pad - chevron / 2f, cy = Height / 2f;
         using var pen = new Pen(Enabled ? Ui.Muted : Ui.Gray, Ui.Scale(this, 2)) { StartCap = LineCap.Round, EndCap = LineCap.Round };
         g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -392,6 +423,16 @@ internal sealed class StatusPill : Control
         Invalidate();
     }
 
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        int padding = Ui.Scale(this, 30);
+        int natural = TextRenderer.MeasureText(Text, Font, Size.Empty, TextFormatFlags.SingleLine).Width + padding;
+        int width = proposedSize.Width > 0 ? Math.Min(natural, proposedSize.Width) : natural;
+        var text = TextRenderer.MeasureText(Text, Font, new Size(Math.Max(1, width - padding), int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+        return new Size(width, Math.Max(Ui.Scale(this, 26), text.Height + Ui.Scale(this, 8)));
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
@@ -400,7 +441,8 @@ internal sealed class StatusPill : Control
         using (var brush = new SolidBrush(dot))
             g.FillEllipse(brush, left, (Height - d) / 2f, d, d);
         var bounds = new Rectangle(left + d + Ui.Scale(this, 6), 0, Width - left - d, Height);
-        TextRenderer.DrawText(g, Text, Font, bounds, ink, TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.SingleLine);
+        TextRenderer.DrawText(g, Text, Font, bounds, ink,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
     }
 }
 
@@ -548,5 +590,140 @@ internal sealed class FlowRow : FlowLayoutPanel
         WrapContents = false;
         Margin = Padding.Empty;
         BackColor = Color.Transparent;
+    }
+}
+
+internal sealed class FluidStack : Panel
+{
+    private readonly bool card;
+
+    public FluidStack(bool card = false)
+    {
+        this.card = card;
+        BackColor = card ? Ui.Card : Color.Transparent;
+        Margin = Padding.Empty;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint
+            | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+    }
+
+    internal static Size Measure(Control control, int width)
+    {
+        width = Math.Max(1, width);
+        if (control is RoundedPanel) return new Size(width, Math.Max(control.MinimumSize.Height, control.Height));
+        if (control is FlowLayoutPanel flow)
+        {
+            int x = 0, height = 0, rowHeight = 0;
+            foreach (Control child in flow.Controls)
+            {
+                var size = child.GetPreferredSize(new Size(Math.Max(1, width - child.Margin.Horizontal), 0));
+                int childWidth = Math.Min(width, Math.Max(size.Width, child.MinimumSize.Width) + child.Margin.Horizontal);
+                int childHeight = Math.Max(size.Height, child.MinimumSize.Height) + child.Margin.Vertical;
+                if (x > 0 && x + childWidth > width)
+                {
+                    height += rowHeight;
+                    x = rowHeight = 0;
+                }
+                child.Size = new Size(Math.Max(1, childWidth - child.Margin.Horizontal),
+                    Math.Max(1, childHeight - child.Margin.Vertical));
+                x += childWidth;
+                rowHeight = Math.Max(rowHeight, childHeight);
+            }
+            return new Size(width, height + rowHeight);
+        }
+        var preferred = control.GetPreferredSize(new Size(width, 0));
+        return new Size(Math.Min(width, Math.Max(preferred.Width, control.MinimumSize.Width)),
+            Math.Max(preferred.Height, control.MinimumSize.Height));
+    }
+
+    protected override void OnControlAdded(ControlEventArgs e)
+    {
+        base.OnControlAdded(e);
+        if (e.Control is Label label)
+        {
+            label.AutoSize = false;
+            label.Margin = new Padding(0, 4, 0, 4);
+        }
+    }
+
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        int width = Math.Max(1, proposedSize.Width > 0 ? proposedSize.Width : Width);
+        int height = Padding.Vertical;
+        foreach (Control child in Controls)
+        {
+            if (!child.Visible) continue;
+            height += Measure(child, width - Padding.Horizontal - child.Margin.Horizontal).Height + child.Margin.Vertical;
+        }
+        return new Size(width, height);
+    }
+
+    protected override void OnLayout(LayoutEventArgs e)
+    {
+        base.OnLayout(e);
+        int y = Padding.Top;
+        foreach (Control child in Controls)
+        {
+            if (!child.Visible) continue;
+            int width = Math.Max(1, ClientSize.Width - Padding.Horizontal - child.Margin.Horizontal);
+            var size = Measure(child, width);
+            int childWidth = child is PillButton or StatusPill ? size.Width : width;
+            child.SetBounds(Padding.Left + child.Margin.Left, y + child.Margin.Top, childWidth, size.Height);
+            child.PerformLayout();
+            y += size.Height + child.Margin.Vertical;
+        }
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        if (card) Ui.FillRounded(e.Graphics, this, Ui.Card, Ui.Line, 14);
+        else base.OnPaint(e);
+    }
+}
+
+internal sealed class FluidRow : Panel
+{
+    private readonly Label label;
+    private readonly Control input;
+
+    public FluidRow(Label label, Control input)
+    {
+        this.label = label;
+        this.input = input;
+        BackColor = Color.Transparent;
+        Margin = new Padding(0, 4, 0, 4);
+        label.AutoSize = false;
+        label.Margin = input.Margin = Padding.Empty;
+        Controls.AddRange([label, input]);
+    }
+
+    private bool SideBySide(int width) => width >= Math.Max(480, Ui.Scale(this, 240));
+
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        int width = Math.Max(1, proposedSize.Width > 0 ? proposedSize.Width : Width);
+        int gap = Ui.Scale(this, 8);
+        int labelWidth = SideBySide(width) ? Ui.Scale(this, 90) : width;
+        int labelHeight = label.GetPreferredSize(new Size(labelWidth, 0)).Height;
+        int inputHeight = FluidStack.Measure(input, SideBySide(width) ? width - labelWidth - gap : width).Height;
+        return new Size(width, SideBySide(width) ? Math.Max(labelHeight, inputHeight) : labelHeight + gap + inputHeight);
+    }
+
+    protected override void OnLayout(LayoutEventArgs e)
+    {
+        base.OnLayout(e);
+        int width = Math.Max(1, ClientSize.Width), gap = Ui.Scale(this, 8);
+        if (SideBySide(width))
+        {
+            int labelWidth = Ui.Scale(this, 90);
+            label.SetBounds(0, 0, labelWidth, Height);
+            input.SetBounds(labelWidth + gap, 0, Math.Max(1, width - labelWidth - gap), Height);
+        }
+        else
+        {
+            int labelHeight = label.GetPreferredSize(new Size(width, 0)).Height;
+            label.SetBounds(0, 0, width, labelHeight);
+            input.SetBounds(0, labelHeight + gap, width, Math.Max(1, Height - labelHeight - gap));
+        }
+        input.PerformLayout();
     }
 }

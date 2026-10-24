@@ -17,7 +17,6 @@ internal static class WindowQa
             Console.WriteLine($"dpi={form.DeviceDpi} style={form.FormBorderStyle} bounds={form.Bounds} work={area}");
             Check(form.FormBorderStyle == FormBorderStyle.Sizable && form.MaximizeBox, "Settings must allow resizing and maximizing.");
             Check(area.Contains(form.Bounds), "Shown outer window including title bar must fit the working area.");
-            var scroller = form.Controls.OfType<Panel>().Single(panel => panel.AutoScroll);
             var save = form.AcceptButton as Control ?? throw new InvalidOperationException("Missing Save button.");
             var cancel = form.CancelButton as Control ?? throw new InvalidOperationException("Missing Cancel button.");
             foreach (var viewport in new[] { new Size(1280, 720), new Size(1024, 768), new Size(800, 600), new Size(640, 480) })
@@ -28,12 +27,6 @@ internal static class WindowQa
                 form.Size = new Size(Math.Min(viewport.Width - 48, 720), Math.Min(viewport.Height - 48, 500));
                 form.PerformLayout();
                 Check(work.Contains(form.Bounds), "User-resized window must remain inside remote work area.");
-                foreach (var button in new[] { save, cancel })
-                {
-                    var box = form.RectangleToClient(button.RectangleToScreen(button.ClientRectangle));
-                    Check(form.ClientRectangle.Contains(box), button.Text + " must remain inside the client area.");
-                    Check(!scroller.Bounds.IntersectsWith(box), "Scrollable content must not cover " + button.Text);
-                }
                 form.SetUpdate(new ReleaseInfo(new Version(0, 1, 9), "v0.1.9", "https://github.com/HSoo-Kim/inline-translator"));
                 form.PerformLayout();
                 var footer = save.Parent!;
@@ -44,12 +37,31 @@ internal static class WindowQa
                     for (int j = i + 1; j < buttons.Length; j++)
                         Check(!buttons[i].Bounds.IntersectsWith(buttons[j].Bounds), "Footer actions must not overlap.");
                 }
-                scroller.AutoScrollPosition = Point.Empty;
-                Capture(form, Path.Combine(folder, $"settings-{language}-{viewport.Width}x{viewport.Height}-top.png"));
-                scroller.AutoScrollPosition = new Point(0, scroller.DisplayRectangle.Height);
-                Check(scroller.VerticalScroll.Value > 0, "Small remote window must scroll to remaining settings.");
-                Capture(form, Path.Combine(folder, $"settings-{language}-{viewport.Width}x{viewport.Height}-end.png"));
-                Console.WriteLine($"PASS {language} {viewport}: bounds={form.Bounds}, save/cancel visible, scroll={scroller.AutoScrollPosition}");
+                foreach (string tab in form.TabIds)
+                {
+                    form.SelectTab(tab);
+                    form.PerformLayout();
+                    var scroller = form.ActiveScroller;
+                    foreach (var button in new[] { save, cancel })
+                    {
+                        var box = form.RectangleToClient(button.RectangleToScreen(button.ClientRectangle));
+                        Check(form.ClientRectangle.Contains(box), button.Text + " must remain inside the client area.");
+                        var scrollBounds = form.RectangleToClient(scroller.RectangleToScreen(scroller.ClientRectangle));
+                        Check(!scrollBounds.IntersectsWith(box), "Scrollable content must not cover " + button.Text);
+                    }
+                    Check(!scroller.HorizontalScroll.Visible, $"Horizontal scrolling is forbidden: {language}/{tab}/{viewport}.");
+                    var page = scroller.Controls.Cast<Control>().Single();
+                    int contentBottom = page.Controls.Cast<Control>().Where(control => control.Visible)
+                        .Select(control => control.Bottom + control.Margin.Bottom).DefaultIfEmpty(0).Max();
+                    Check(page.Height >= contentBottom, $"Content extent must include every card: {language}/{tab}/{viewport}.");
+                    scroller.AutoScrollPosition = Point.Empty;
+                    Capture(form, Path.Combine(folder, $"settings-{language}-{tab}-{viewport.Width}x{viewport.Height}-top.png"));
+                    scroller.AutoScrollPosition = new Point(0, scroller.DisplayRectangle.Height);
+                    Capture(form, Path.Combine(folder, $"settings-{language}-{tab}-{viewport.Width}x{viewport.Height}-end.png"));
+                    if (scroller.DisplayRectangle.Height > scroller.ClientSize.Height)
+                        Check(scroller.VerticalScroll.Value > 0, $"Tab content must actually scroll: {language}/{tab}/{viewport}.");
+                    Console.WriteLine($"PASS {language}/{tab} {viewport}: bounds={form.Bounds}, footer visible, horizontal=false");
+                }
                 form.SetUpdate(null);
             }
             var leftMonitor = new Rectangle(-1280, 0, 1280, 720);

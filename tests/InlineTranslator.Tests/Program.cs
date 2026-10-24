@@ -31,6 +31,8 @@ internal static class Program
             ("defaults: Ctrl+Alt+T to English, Claude Haiku then Codex Luna", Defaults),
             ("normalization repairs presets, engines, tone and apps", NormalizeRepairs),
             ("settings roundtrip atomically with Unicode", SettingsRoundtrip),
+            ("settings drafts compare field values rather than list references", SettingsDraftComparison),
+            ("hotkey draft validation locates every enabled error without repairing it", HotkeyDraftValidation),
             ("missing, corrupt and null settings files", SettingsEdgeFiles),
             ("prompts name the target and stay shell-safe for every language", Prompts),
             ("capture uses selection first and whole input only in listed apps", CaptureRules),
@@ -207,6 +209,61 @@ internal static class Program
         Equal(Provider.Claude, loaded.Primary.Provider);
         Equal(Provider.None, loaded.Fallback.Provider);
         Equal(0, loaded.WholeInputApps.Count);
+    }
+
+    private static void SettingsDraftComparison()
+    {
+        var original = new AppSettings().Normalize();
+        var copied = original with { Presets = original.Presets.ToArray(), WholeInputApps = original.WholeInputApps.ToArray() };
+        Check(SettingsStore.Equivalent(original, copied), "Rebuilt controls are not unsaved changes.");
+        AppSettings[] changes =
+        [
+            copied with { UiLanguage = "ja" },
+            copied with { Primary = original.Primary with { Model = "claude-opus-5-5" } },
+            copied with { Fallback = new EngineChoice(Provider.None, "") },
+            copied with { Presets = original.Presets.Select((preset, i) => i == 0 ? preset with { Hotkey = "Ctrl+Alt+E" } : preset).ToArray() },
+            copied with { ReadingHotkeyEnabled = false },
+            copied with { ReadingHotkey = "Ctrl+Alt+F" },
+            copied with { Tone = "formal" },
+            copied with { HomeLanguage = "ko" },
+            copied with { WholeInputApps = ["Telegram"] },
+            copied with { BubbleTheme = "dark" },
+            copied with { BubblePosition = "selection" },
+            copied with { CheckForUpdates = false },
+            copied with { AutoInstallUpdates = false },
+        ];
+        foreach (var change in changes) Check(!SettingsStore.Equivalent(original, change), "Every persisted field participates in dirty detection.");
+        Check(SettingsStore.Equivalent(original, (copied with { Tone = "formal" }) with { Tone = original.Tone }), "Reverting a field clears dirty state.");
+    }
+
+    private static void HotkeyDraftValidation()
+    {
+        var original = new AppSettings().Normalize();
+        Equal(0, SettingsValidation.HotkeyErrors(original).Count);
+        var duplicate = original with
+        {
+            Presets =
+            [
+                new(true, "ctrl+alt+t", "en"), new(true, "Ctrl+Alt+T", "ja"), new(false, "", "ko"),
+            ],
+            ReadingHotkey = "Ctrl+Alt+T",
+        };
+        var errors = SettingsValidation.HotkeyErrors(duplicate);
+        Equal(3, errors.Count);
+        foreach (int index in new[] { 0, 1, 3 }) Equal(HotkeyProblem.Duplicate, errors[index]);
+        Check(duplicate.Presets[1].Enabled && duplicate.ReadingHotkeyEnabled, "Validation must not silently disable conflicts.");
+        var invalid = original with
+        {
+            Presets = [new(true, "", "en"), new(true, "Shift+A", "ja"), new(false, "Ctrl+Alt+T", "ko")],
+            ReadingHotkeyEnabled = false,
+            ReadingHotkey = "",
+        };
+        errors = SettingsValidation.HotkeyErrors(invalid);
+        Equal(2, errors.Count);
+        Equal(HotkeyProblem.Missing, errors[0]);
+        Equal(HotkeyProblem.Invalid, errors[1]);
+        var repaired = duplicate with { ReadingHotkeyEnabled = false, Presets = [duplicate.Presets[0], duplicate.Presets[1] with { Enabled = false }, duplicate.Presets[2]] };
+        Equal(0, SettingsValidation.HotkeyErrors(repaired).Count);
     }
 
     private static void Prompts()
@@ -600,7 +657,7 @@ internal static class Program
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://github.com/a","assets":[{"name":"inline-translator-win-x64.zip","browser_download_url":"https://github.com/x"}]}""")!.PackageUrl is null, "no digest means no automatic install");
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://evil.example/"}""") is null, "non-GitHub page rejected");
         Check(Parse("""{"tag_name":"latest","html_url":"https://github.com/a"}""") is null, "non-version tag rejected");
-        Equal(new Version(0, 1, 9), UpdateChecker.Current);
+        Equal(new Version(0, 1, 10), UpdateChecker.Current);
     }
 
     private static void UpdateInstall()
