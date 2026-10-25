@@ -130,7 +130,8 @@ internal static class Keyboard
     private static Native.Input Key(ushort virtualKey, uint flags) => new()
     {
         Type = InputKeyboard,
-        Data = new Native.InputUnion { Keyboard = new Native.KeyboardInput { VirtualKey = virtualKey, Flags = flags } },
+        Data = new Native.InputUnion { Keyboard = new Native.KeyboardInput
+            { VirtualKey = virtualKey, Flags = flags, ExtraInfo = (nint)Capture.SyntheticInputTag } },
     };
 }
 

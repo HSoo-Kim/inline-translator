@@ -8,8 +8,9 @@ using InlineTranslator;
 
 internal static class RecoveryQa
 {
-    private const string Artifacts = @"C:\Users\ADMIN\Desktop\inline-translator\artifacts";
-    private const string InstalledExe = @"C:\Users\ADMIN\AppData\Local\Programs\InlineTranslator\InlineTranslator.exe";
+    private static readonly string Artifacts = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts"));
+    private static readonly string InstalledExe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Programs", "InlineTranslator", UpdateChecker.ExecutableName);
 
     internal static async Task VerifyAsync(string folder)
     {

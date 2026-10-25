@@ -29,6 +29,7 @@ public enum CaptureMode { Selection, WholeInput, NeedSelection }
 
 public static class Capture
 {
+    public const uint SyntheticInputTag = 0x49544B59;
     public const int WholeInputMaxCharacters = 2000;
     public const int WholeInputMaxLines = 30;
 
@@ -43,8 +44,8 @@ public static class Capture
     public static bool SelectionUnchanged(string original, string? current) =>
         current is not null && original.Replace("\r\n", "\n") == current.Replace("\r\n", "\n");
 
-    public static bool InputInvalidates(uint type, ushort flags) =>
-        type == 0 ? flags != 0 : type == 1 && (flags & 1) == 0;
+    public static bool InputInvalidates(uint type, ushort flags, uint extraInfo = 0) =>
+        type == 0 ? flags != 0 : type == 1 && extraInfo != SyntheticInputTag && (flags & 1) == 0;
 
     private static string Normalize(string text) => text.Replace("\r\n", "\n").Trim();
 

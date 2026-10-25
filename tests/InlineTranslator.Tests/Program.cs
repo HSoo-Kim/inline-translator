@@ -420,6 +420,9 @@ internal static class Program
         Check(!Capture.SelectionUnchanged("old", null), "lost selection rejected");
         Check(!Capture.SelectionUnchanged("old ", "old"), "whitespace changes must not be ignored");
         Check(Capture.InputInvalidates(1, 0), "key down invalidates replacement");
+        Check(!Capture.InputInvalidates(1, 0, 0x49544B59), "our copy/paste key presses must not invalidate replacement");
+        Check(Capture.InputInvalidates(1, 0, 0x1234), "other injected input must still invalidate replacement");
+        Check(Capture.InputInvalidates(0, 1, 0x49544B59), "a mouse click must still invalidate replacement");
         Check(!Capture.InputInvalidates(1, 1), "releasing the triggering shortcut is harmless");
         Check(!Capture.InputInvalidates(0, 0), "pointer movement does not invalidate");
         Check(Capture.InputInvalidates(0, 1), "mouse click invalidates");
@@ -673,7 +676,7 @@ internal static class Program
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://github.com/a","assets":[{"name":"inline-translator-win-x64.zip","browser_download_url":"https://github.com/x"}]}""")!.PackageUrl is null, "no digest means no automatic install");
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://evil.example/"}""") is null, "non-GitHub page rejected");
         Check(Parse("""{"tag_name":"latest","html_url":"https://github.com/a"}""") is null, "non-version tag rejected");
-        Equal(new Version(0, 1, 13), UpdateChecker.Current);
+        Equal(new Version(0, 1, 14), UpdateChecker.Current);
         Equal(300000, UpdateChecker.CheckIntervalMilliseconds);
     }
 

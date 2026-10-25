@@ -65,12 +65,13 @@ internal sealed class TranslationGuard : NativeWindow, IDisposable
                 byte[] data = new byte[size];
                 if (GetRawInputData(message.LParam, 0x10000003, data, ref size, headerSize) == uint.MaxValue)
                     InputChanged = true;
-                else if (size >= headerSize + 8)
+                else if (size >= headerSize + 16)
                 {
                     uint type = BitConverter.ToUInt32(data, 0);
                     int start = (int)headerSize;
                     ushort flags = BitConverter.ToUInt16(data, start + (type == 0 ? 4 : 2));
-                    if (Capture.InputInvalidates(type, flags)) InputChanged = true;
+                    uint extraInfo = type == 1 ? BitConverter.ToUInt32(data, start + 12) : 0;
+                    if (Capture.InputInvalidates(type, flags, extraInfo)) InputChanged = true;
                 }
             }
         }

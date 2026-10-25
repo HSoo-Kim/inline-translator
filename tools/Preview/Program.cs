@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using InlineTranslator;
 
-// Developer tool: UI commands run only on a private desktop. No simulated desktop input.
+// Rendering/operation QA uses a private desktop. Explicit replacement QA types only into its verified foreground fixture.
 internal static class Program
 {
     internal static readonly TimeSpan QaTimeout = TimeSpan.FromSeconds(30);
@@ -39,10 +39,16 @@ internal static class Program
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => RenderAsync(folder)) : 2;
         if (args is ["verify"])
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(OperationQa.VerifyAsync) : 2;
+        if (args is ["verify-replacement", var replacementFolder])
+            return RunUiAsync(() => ReplacementQa.VerifyAsync(replacementFolder));
         if (args is ["window-check", var windowFolder])
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => WindowQa.VerifyAsync(windowFolder)) : 2;
         if (args is ["recovery-check", var recoveryFolder])
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => RecoveryQa.VerifyAsync(recoveryFolder)) : 2;
+        if (args is ["settings-check", var settingsFolder])
+            return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => SettingsQa.VerifyAsync(settingsFolder)) : 2;
+        if (args is ["update-check-qa", var updateFolder])
+            return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => UpdateQa.VerifyAsync(updateFolder)) : 2;
         if (args is ["lnk", var shortcut])
         {
             try { Console.WriteLine("target: " + AppCatalog.ShortcutTarget(shortcut)); }

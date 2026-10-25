@@ -16,7 +16,7 @@ internal sealed class TrayApp : ApplicationContext
     private readonly HotkeyWindow hotkeys;
     private readonly BusyIndicator indicator = new();
     private readonly TranslationBubble bubble = new();
-    private readonly Translator translator = new(EngineCli.TranslateAsync);
+    private readonly Translator translator;
     private readonly System.Windows.Forms.Timer updateTimer = new() { Interval = UpdateChecker.CheckIntervalMilliseconds };
     private readonly Func<CancellationToken, Task<ReleaseInfo?>> fetchUpdate;
     private readonly ToolStripMenuItem updateItem = new() { Visible = false };
@@ -31,20 +31,22 @@ internal sealed class TrayApp : ApplicationContext
     private ReleaseInfo? update;
     private bool busy, installing, checkingUpdates;
     internal Task CurrentUpdateCheck { get; private set; } = Task.CompletedTask;
+    internal Task CurrentTranslation { get; private set; } = Task.CompletedTask;
     internal ContextMenuStrip TrayMenu => tray.ContextMenuStrip!;
     internal SettingsForm? SettingsWindow => settingsForm;
     private Action? balloonAction;
     private readonly HashSet<Provider> signInReminded = [];
 
     public TrayApp(string settingsPath, AppSettings settings, bool firstRun, uint activationMessage,
-        Func<CancellationToken, Task<ReleaseInfo?>>? fetchUpdate = null)
+        Func<CancellationToken, Task<ReleaseInfo?>>? fetchUpdate = null, EngineRun? runEngine = null)
     {
         this.settingsPath = settingsPath;
         this.settings = settings;
         this.fetchUpdate = fetchUpdate ?? UpdateChecker.FetchLatestAsync;
+        translator = new Translator(runEngine ?? EngineCli.TranslateAsync);
         text = new UiText(settings.UiLanguage);
         hotkeys = new HotkeyWindow(activationMessage);
-        hotkeys.HotkeyPressed += id => _ = TranslateActiveAsync(id - 1, reading: id == ReadingHotkeyId);
+        hotkeys.HotkeyPressed += id => CurrentTranslation = TranslateActiveAsync(id - 1, reading: id == ReadingHotkeyId);
         hotkeys.ActivationRequested += ShowSettings;
 
         var menu = new ContextMenuStrip { Renderer = new RoundMenuRenderer(), Font = Ui.Regular() };
@@ -183,6 +185,9 @@ internal sealed class TrayApp : ApplicationContext
         try
         {
             nint window = Native.GetForegroundWindow();
+            // Do not observe the triggering shortcut's queued key presses as edits.
+            await Keyboard.WaitForModifiersReleasedAsync(TimeSpan.FromSeconds(2));
+            if (Native.GetForegroundWindow() != window) return;
             guard = new TranslationGuard(window);
             var token = guard.Token;
             async Task<string?> CopySelectionAsync(bool selectAll, TimeSpan wait)
@@ -199,8 +204,6 @@ internal sealed class TrayApp : ApplicationContext
                     }
                 }
             }
-            await Keyboard.WaitForModifiersReleasedAsync(TimeSpan.FromSeconds(2), token);
-            if (Native.GetForegroundWindow() != window) return;
             snapshot = ClipboardSnapshot.Take();
             string? copied = await CopySelectionAsync(selectAll: false, SelectionProbe);
             string? process = ForegroundWindow.ProcessName(window);
