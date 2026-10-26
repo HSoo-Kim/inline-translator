@@ -86,8 +86,9 @@ Interface language applies with Save rather than discarding other edits when a l
 
 ## Good to know
 
-- **PDF**: if an editing toolbar pops up when you drag-select, press `Esc` to close it, then press the hotkey to translate.
-- **Reading translation**: selection and copying vary between apps, so this feature may not always work smoothly. Prefer `Ctrl+Alt+R` for PDFs and web text because it never pastes. Image-only PDFs without copyable text are not supported.
+- **Reading formats**: the app translates selected text supplied by the viewer, not the file itself. Text-layer PDFs, web pages, TXT/Markdown, office documents and email work when their apps allow copying text. Unicode/plain text and RTF-only copies are supported; image-only scans and copy-protected text are not. There is no OCR or whole-file conversion.
+- **PDF**: select actual text and press `Ctrl+Alt+R`; the editing toolbar does not need to be closed first. Slow PDF copying is allowed up to two seconds.
+- **Writing**: selection copying and verification allow up to two seconds in slower editors, while listed chat apps retain the fast no-selection probe. Output is plain text, not a document-format or spreadsheet-layout conversion. Paste rechecks focus after publishing the clipboard; unsupported clipboard contents that cannot be preserved stop the operation before copying.
 - Tested with Claude Code 2.1.300 and Codex CLI 0.153.2. Much older versions may lack some options.
 - Some apps (code editors, for example) copy the whole line when you press `Ctrl+C` with nothing selected. Select the text first there.
 - Windows does not allow pasting into windows running as administrator.

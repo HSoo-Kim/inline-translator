@@ -6,7 +6,7 @@ internal sealed class TrayApp : ApplicationContext
 {
     internal const int ReadingHotkeyId = AppSettings.PresetCount + 1;
     private static readonly TimeSpan SelectionProbe = TimeSpan.FromMilliseconds(350);
-    private static readonly TimeSpan CopyWait = TimeSpan.FromMilliseconds(800);
+    private static readonly TimeSpan CopyWait = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan PasteSettle = TimeSpan.FromMilliseconds(400);
 
     private readonly string settingsPath;
@@ -192,6 +192,7 @@ internal sealed class TrayApp : ApplicationContext
             var token = guard.Token;
             async Task<string?> CopySelectionAsync(bool selectAll, TimeSpan wait)
             {
+                if (Native.GetForegroundWindow() != window) return null;
                 uint before = Native.GetClipboardSequenceNumber();
                 try { return await CopyAsync(selectAll, wait, token); }
                 finally
@@ -205,9 +206,10 @@ internal sealed class TrayApp : ApplicationContext
                 }
             }
             snapshot = ClipboardSnapshot.Take();
-            string? copied = await CopySelectionAsync(selectAll: false,
-                reading ? TimeSpan.FromSeconds(2) : SelectionProbe);
             string? process = ForegroundWindow.ProcessName(window);
+            bool wholeInputApp = Capture.Decide(false, process, settings.WholeInputApps) == CaptureMode.WholeInput;
+            string? copied = await CopySelectionAsync(selectAll: false,
+                reading || !wholeInputApp ? CopyWait : SelectionProbe);
             var mode = Capture.Decide(!string.IsNullOrWhiteSpace(copied), process, settings.WholeInputApps, reading);
             if (mode == CaptureMode.WholeInput)
             {
@@ -269,17 +271,25 @@ internal sealed class TrayApp : ApplicationContext
             // Verify the original selection, including whole-input selections. Never select all again:
             // doing so could overwrite text typed while the engine was working.
             snapshot = ClipboardSnapshot.Take();
-            string? current = await CopySelectionAsync(selectAll: false, SelectionProbe);
+            string? current = await CopySelectionAsync(selectAll: false, CopyWait);
             if (!guard.CanReplace || !Capture.SelectionUnchanged(copied, current))
             {
                 ShowBubble(changed: true);
                 return;
             }
             token.ThrowIfCancellationRequested();
-            guard.FinishTranslation();
             PrivateClipboard.SetText(result.Text);
             ownedClipboard = Native.GetClipboardSequenceNumber();
             restoreClipboard = true;
+            token.ThrowIfCancellationRequested();
+            // Publishing the clipboard can block while another app owns it. Recheck focus/caret
+            // after that call, not only before it, so Ctrl+V is not sent into a different input.
+            if (!guard.CanReplace)
+            {
+                ShowBubble(changed: true);
+                return;
+            }
+            guard.FinishTranslation();
             Keyboard.Chord(Native.VkControl, Native.VkV);
             await Task.Delay(PasteSettle, token);
             // Many apps do not report read-only text. If the original selection is still selected after
@@ -334,11 +344,18 @@ internal sealed class TrayApp : ApplicationContext
             token.ThrowIfCancellationRequested();
             // PDF viewers can clear the clipboard before publishing the selected text.
             // A sequence change alone does not mean the copy has finished.
-            if (Native.GetClipboardSequenceNumber() != before && Clipboard.ContainsText())
+            try
             {
-                string copied = Clipboard.GetText();
-                if (!string.IsNullOrWhiteSpace(copied))
-                    return copied;
+                if (Native.GetClipboardSequenceNumber() != before)
+                {
+                    string? copied = ClipboardText.Read(Clipboard.GetDataObject());
+                    if (!string.IsNullOrWhiteSpace(copied)) return copied;
+                }
+            }
+            catch (System.Runtime.InteropServices.ExternalException)
+            {
+                // Some producers briefly lock the clipboard while publishing the selection.
+                // Retry only within the same bounded copy deadline.
             }
             if (clock.Elapsed > wait) return null;
             await Task.Delay(15, token);

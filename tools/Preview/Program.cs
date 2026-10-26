@@ -41,6 +41,10 @@ internal static class Program
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(OperationQa.VerifyAsync) : 2;
         if (args is ["verify-replacement", var replacementFolder])
             return RunUiAsync(() => ReplacementQa.VerifyAsync(replacementFolder));
+        if (args is ["verify-clipboard"])
+            return RunUiAsync(ClipboardQa.VerifyAsync);
+        if (args is ["verify-clipboard-native"])
+            return OperationQa.RequirePrivateDesktop() ? RunUiAsync(ClipboardQa.VerifyNativeAsync) : 2;
         if (args is ["verify-pdf-reading", var pdfHandle, var pdfFolder])
             return RunUiAsync(() => PdfReadingQa.VerifyAsync(pdfHandle, pdfFolder));
         if (args is ["probe-pdf-reading", var probeHandle, var probeFolder, var expectedPdf])

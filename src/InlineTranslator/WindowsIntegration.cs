@@ -9,12 +9,14 @@ internal sealed class ClipboardSnapshot
 
     private ClipboardSnapshot(DataObject? data) => this.data = data;
 
-    public static ClipboardSnapshot Take()
+    public static ClipboardSnapshot Take() => Take(Clipboard.GetDataObject());
+
+    internal static ClipboardSnapshot Take(IDataObject? current)
     {
-        var current = Clipboard.GetDataObject();
         if (current is null) return new ClipboardSnapshot(null);
         var copy = new DataObject();
-        foreach (string format in current.GetFormats(autoConvert: false))
+        string[] formats = current.GetFormats(autoConvert: false);
+        foreach (string format in formats)
         {
             object? value;
             try
@@ -29,7 +31,10 @@ internal sealed class ClipboardSnapshot
             }
             if (value is not null) copy.SetData(format, autoConvert: false, value);
         }
-        return new ClipboardSnapshot(copy.GetFormats().Length > 0 ? copy : null);
+        bool preserved = copy.GetFormats(autoConvert: false).Length > 0;
+        if (formats.Length > 0 && !preserved)
+            throw new InvalidOperationException("Clipboard contents cannot be preserved. Copy plain text before trying again.");
+        return new ClipboardSnapshot(preserved ? copy : null);
     }
 
     public void Restore()
