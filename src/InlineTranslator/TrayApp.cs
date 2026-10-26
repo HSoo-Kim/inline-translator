@@ -205,7 +205,8 @@ internal sealed class TrayApp : ApplicationContext
                 }
             }
             snapshot = ClipboardSnapshot.Take();
-            string? copied = await CopySelectionAsync(selectAll: false, SelectionProbe);
+            string? copied = await CopySelectionAsync(selectAll: false,
+                reading ? TimeSpan.FromSeconds(2) : SelectionProbe);
             string? process = ForegroundWindow.ProcessName(window);
             var mode = Capture.Decide(!string.IsNullOrWhiteSpace(copied), process, settings.WholeInputApps, reading);
             if (mode == CaptureMode.WholeInput)
@@ -328,13 +329,20 @@ internal sealed class TrayApp : ApplicationContext
         if (selectAll) Keyboard.Chord(Native.VkControl, Native.VkA);
         Keyboard.Chord(Native.VkControl, Native.VkC);
         var clock = Stopwatch.StartNew();
-        while (Native.GetClipboardSequenceNumber() == before)
+        while (true)
         {
+            token.ThrowIfCancellationRequested();
+            // PDF viewers can clear the clipboard before publishing the selected text.
+            // A sequence change alone does not mean the copy has finished.
+            if (Native.GetClipboardSequenceNumber() != before && Clipboard.ContainsText())
+            {
+                string copied = Clipboard.GetText();
+                if (!string.IsNullOrWhiteSpace(copied))
+                    return copied;
+            }
             if (clock.Elapsed > wait) return null;
             await Task.Delay(15, token);
         }
-        token.ThrowIfCancellationRequested();
-        return Clipboard.ContainsText() ? Clipboard.GetText() : "";
     }
 
     private static void RestoreClipboard(ClipboardSnapshot snapshot)
