@@ -2,13 +2,21 @@
 
 <h1 align="center">Inline Translator</h1>
 
+<p align="center"><b>Translate where you type. Read translations in a bubble.</b></p>
+
+<p align="center">
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest/download/inline-translator-win-x64.zip"><img src="https://img.shields.io/badge/Download-Windows%20x64-000000?style=for-the-badge" alt="Download Inline Translator for Windows x64"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest"><img src="https://img.shields.io/github/v/release/HSoo-Kim/inline-translator?style=for-the-badge&label=Release&color=007ec6" alt="Latest release"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases"><img src="https://img.shields.io/github/downloads/HSoo-Kim/inline-translator/total?style=for-the-badge&label=Downloads&color=1E90FF" alt="Total GitHub release downloads"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/stargazers"><img src="https://img.shields.io/github/stars/HSoo-Kim/inline-translator?style=for-the-badge&label=Stars&logo=github&logoColor=white&color=000000" alt="GitHub stars"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-3DA639?style=for-the-badge" alt="MIT license"></a>
+</p>
+
 <p align="center"><a href="README.md">한국어</a> · <b>English</b> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a></p>
+<p align="center"><sub>Windows 11 x64 · .NET included · Claude Code or Codex CLI required</sub></p>
 
-Tired of opening ChatGPT or Claude, pasting, copying and switching back just to translate one line?
-
-Now it is **one hotkey, right where you are typing**. In a few seconds your text turns into the translation in place.
-
-> **Never pick a source language.** Korean, Japanese, a mix of several — whatever you write in is detected automatically and turned into the language you chose. The only choice is what to translate *into*.
+Translate selected text in place with a hotkey, or read a translation of non-editable text in a bubble.
+The source language is detected automatically; choose the target language in Settings.
 
 <p align="center"><img src="docs/images/demo-en.gif" width="800" alt="Typing Korean in a chat box, pressing Ctrl+Alt+T, and the text becoming English"></p>
 <p align="center"><sub>A reenactment built from a real Claude Haiku translation.</sub></p>
@@ -18,13 +26,25 @@ Now it is **one hotkey, right where you are typing**. In a few seconds your text
 | Do this | Get this |
 |---|---|
 | 💬 In a chat input box, **just press `Ctrl+Alt+T`** | The **whole message** you typed is translated |
-| 🖱️ **Drag to select, then press `Ctrl+Alt+T`** | **Only the selection** is translated (chat, email, documents, anywhere) |
+| 🖱️ **Drag to select, then press `Ctrl+Alt+T`** | **Only the selection** is translated (chat, email, documents and more) |
 | **Select text, then press `Ctrl+Alt+R`** | **Two-way reading translation**, showing a bubble without changing the original |
 | **Press `Esc` while translating** | Cancel the current translation |
 
-- Two to four seconds later the translation replaces your text. Don't like it? `Ctrl+Z`.
+- The translation replaces your text. Use `Ctrl+Z` to undo it. Translation time varies by engine and input.
 - Apps where no selection means the whole input box: Telegram, KakaoTalk, Slack, Discord, WhatsApp, LINE, Teams, Signal. Add or remove apps in Settings.
 - Everywhere else (Word, browsers, …) only the selection is translated, so a whole document is never replaced by accident.
+
+## Getting started
+
+1. **Set up an engine** — at least one of these, installed and signed in:
+   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code): install, run `claude` in a terminal and sign in
+   - [Codex CLI](https://github.com/openai/codex): install, then `codex login`
+2. **[Download the latest release](https://github.com/HSoo-Kim/inline-translator/releases/latest)**, unzip `inline-translator-win-x64.zip` and run `InlineTranslator.exe`.
+3. Settings open on first launch. Use `Test` in Engines, choose languages and hotkeys in Translation, then `Save`.
+
+From then on it runs quietly in the notification area. Click the icon for Settings; right-click to pause or exit.
+
+Built for Windows 11 x64. The executable includes .NET, so nothing else to install. It is not code-signed yet, so Windows may warn on first launch.
 
 ## Features
 
@@ -41,21 +61,9 @@ Now it is **one hotkey, right where you are typing**. In a few seconds your text
 - **Protect ongoing edits** — typing or clicking to move the cursor while translating prevents replacement; the result appears in a bubble instead. The selection is checked again before pasting. Whole-input translation never selects everything again and overwrites newly typed text.
 - **Reading shortcut** — `Ctrl+Alt+R` works both ways too. Text in My language goes to the reading shortcut's selected language; other text comes to My language. It only shows a bubble and never pastes. Choose its target language and hotkey, or disable it, in Settings.
 - **Esc to cancel** — while translating, `Esc` stops the running engine without starting the fallback or logging an error. After translation, Esc works normally in the foreground app again.
-- **Nothing recorded** — translated text is never written to disk or to Windows clipboard history (`Win+V`).
+- **Minimize records** — engine session saving is disabled, and temporary files are deleted after use when possible. See the clipboard and error-log notes below.
 - **One-click update** — when a new version is out, an `Update` button appears in the tray menu and Settings. Click it to download, replace and restart.
 - **Interface languages** — 한국어, English, 简体中文, 日本語. Save a choice in General or switch from the tray menu.
-
-## Getting started
-
-1. **Set up an engine** — at least one of these, installed and signed in:
-   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code): install, run `claude` in a terminal and sign in
-   - [Codex CLI](https://github.com/openai/codex): install, then `codex login`
-2. **[Download the latest release](https://github.com/HSoo-Kim/inline-translator/releases/latest)**, unzip `inline-translator-win-x64.zip` and run `InlineTranslator.exe`.
-3. Settings open on first launch. Use `Test` in Engines, choose languages and hotkeys in Translation, then `Save`.
-
-From then on it runs quietly in the notification area. Click the icon for Settings; right-click to pause or exit.
-
-Built for Windows 11 x64. The executable includes .NET, so nothing else to install. It is not code-signed yet, so Windows may warn on first launch.
 
 ## Settings
 
@@ -77,9 +85,10 @@ Interface language applies with Save rather than discarding other edits when a l
 
 ## Data and privacy
 
-- Text is sent **only to the engine you chose** (Claude Code or Codex). The app itself sends it nowhere else.
-- Engines run with session saving off (`--no-session-persistence`, `--ephemeral`), tools disabled, inside an empty temporary folder that is deleted right after.
-- The error log (`%LOCALAPPDATA%\InlineTranslator\error.log`) holds error messages only, never your text.
+- Text is sent to **the engine you chose** (Claude Code or Codex), and that provider's data policies apply.
+- Engines run with session saving off (`--no-session-persistence`, `--ephemeral`) and tools restricted in a temporary folder. Codex writes the translated result to a temporary file. The app attempts to delete the folder afterward, but it may remain if cleanup fails or the app exits unexpectedly.
+- Reading selected text uses the copy command, so the original may appear in Windows clipboard history or another clipboard manager. When pasting a translation, the app requests exclusion from Windows clipboard history and cloud sync and restores the previous clipboard when possible.
+- The error log (`%LOCALAPPDATA%\InlineTranslator\error.log`) can include engine error messages. If an engine includes text in an error message, that text may also be logged.
 - Update checks read only the latest release from GitHub (`api.github.com`). Updates install only if the SHA-256 published by GitHub matches. You can turn this off.
 - Settings file: `%LOCALAPPDATA%\InlineTranslator\settings.json`
 - Translations count toward your subscription usage.

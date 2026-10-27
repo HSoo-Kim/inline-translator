@@ -2,13 +2,21 @@
 
 <h1 align="center">Inline Translator</h1>
 
+<p align="center"><b>쓰던 자리에서 번역하고, 읽을 땐 말풍선으로.</b></p>
+
+<p align="center">
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest/download/inline-translator-win-x64.zip"><img src="https://img.shields.io/badge/Download-Windows%20x64-000000?style=for-the-badge" alt="Windows x64용 Inline Translator 다운로드"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest"><img src="https://img.shields.io/github/v/release/HSoo-Kim/inline-translator?style=for-the-badge&label=Release&color=007ec6" alt="최신 릴리즈"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases"><img src="https://img.shields.io/github/downloads/HSoo-Kim/inline-translator/total?style=for-the-badge&label=Downloads&color=1E90FF" alt="GitHub 릴리즈 누적 다운로드"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/stargazers"><img src="https://img.shields.io/github/stars/HSoo-Kim/inline-translator?style=for-the-badge&label=Stars&logo=github&logoColor=white&color=000000" alt="GitHub Stars"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-3DA639?style=for-the-badge" alt="MIT 라이선스"></a>
+</p>
+
 <p align="center"><b>한국어</b> · <a href="README.en.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a></p>
+<p align="center"><sub>Windows 11 x64 · .NET 포함 · Claude Code 또는 Codex CLI 필요</sub></p>
 
-번역 한 줄 하려고 GPT, Claude 창 열고, 붙여 넣고, 복사해서 다시 돌아오느라 고생하셨죠?
-
-이제 **쓰던 자리에서 단축키 한 번**이면 됩니다. 몇 초 안에 그 자리에서 번역문으로 바뀝니다.
-
-> **원문 언어는 신경 쓰지 마세요.** 한국어든 일본어든 여러 언어가 섞여 있든, 무슨 언어인지 자동으로 알아내서 정해 둔 언어로 바꿉니다. 고를 건 "무엇으로 바꿀지" 하나뿐입니다.
+선택한 글을 단축키로 번역해 입력하던 곳에 넣거나, 읽기 전용 텍스트의 번역을 말풍선으로 볼 수 있습니다.
+원문 언어는 자동으로 판단하며, 번역할 언어는 설정에서 고릅니다.
 
 <p align="center"><img src="docs/images/demo-ko.gif" width="800" alt="메신저 입력창에 한글을 쓰고 Ctrl+Alt+T를 누르자 영어로 바뀌는 시연"></p>
 <p align="center"><sub>실제 Claude Haiku 번역 결과로 재현한 시연 화면입니다.</sub></p>
@@ -18,13 +26,25 @@
 | 이렇게 하면 | 이렇게 번역됩니다 |
 |---|---|
 | 💬 메신저 입력창에서 **그냥 `Ctrl+Alt+T`** | 입력창에 쓴 **글 전체**를 번역 |
-| 🖱️ **드래그로 선택한 뒤 `Ctrl+Alt+T`** | **선택한 부분만** 번역 (메신저, 메일, 문서 어디서든) |
+| 🖱️ **드래그로 선택한 뒤 `Ctrl+Alt+T`** | **선택한 부분만** 번역 (메신저, 메일, 문서 등) |
 | **드래그로 선택한 뒤 `Ctrl+Alt+R`** | **양방향 읽기 번역**. 원문을 바꾸지 않고 말풍선으로 표시 |
 | **번역 중 `Esc`** | 진행 중인 번역 취소 |
 
-- 2~4초 뒤 그 자리에서 번역문으로 바뀝니다. 마음에 안 들면 `Ctrl+Z`.
+- 번역 결과가 그 자리에 들어갑니다. 마음에 안 들면 `Ctrl+Z`로 되돌릴 수 있습니다. 소요 시간은 엔진과 입력에 따라 달라집니다.
 - 선택 없이 전체를 번역하는 앱: 텔레그램, 카카오톡, 슬랙, 디스코드, 왓츠앱, 라인, Teams, Signal. 설정에서 더하거나 뺄 수 있습니다.
 - 그 밖의 앱(Word, 브라우저 등)에서는 문서 전체가 바뀌는 일이 없도록 선택한 부분만 번역합니다.
+
+## 시작하기
+
+1. **번역 엔진 준비** — 둘 중 하나 이상이 설치·로그인돼 있어야 합니다.
+   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code): 설치 후 터미널에서 `claude` 실행 → 로그인
+   - [Codex CLI](https://github.com/openai/codex): 설치 후 `codex login`
+2. **[최신 버전 다운로드](https://github.com/HSoo-Kim/inline-translator/releases/latest)** → `inline-translator-win-x64.zip`을 풀고 `InlineTranslator.exe` 실행.
+3. 처음 실행하면 설정 창이 뜹니다. `엔진` 탭에서 `테스트`로 번역을 확인하고, `번역` 탭에서 언어·단축키를 설정한 뒤 `저장`.
+
+이후에는 알림 영역(시계 옆)에서 조용히 실행됩니다. 아이콘을 클릭하면 설정, 우클릭하면 일시 중지·종료 메뉴가 나옵니다.
+
+Windows 11 x64용이고, 실행 파일에 .NET이 포함돼 있어 따로 설치할 것은 없습니다. 코드 서명이 없어서 처음 실행할 때 Windows가 경고를 띄울 수 있습니다.
 
 ## 기능
 
@@ -41,21 +61,9 @@
 - **입력 보호** — 번역 중 타이핑하거나 클릭해 커서를 옮기면 원문을 덮어쓰지 않고 결과만 말풍선으로 보여줍니다. 붙여넣기 직전에도 선택한 글이 그대로인지 확인합니다. 입력창 전체 번역도 새로 쓴 글을 다시 전체 선택해 덮어쓰지 않습니다.
 - **읽기 전용 단축키** — `Ctrl+Alt+R`도 양방향입니다. 내 언어로 된 글은 읽기 설정에서 선택한 언어로, 다른 언어의 글은 내 언어로 번역해 말풍선만 보여줍니다. 원문에 붙여넣지 않습니다. 설정에서 번역 언어·단축키를 바꾸거나 끌 수 있습니다.
 - **Esc로 취소** — 번역 중 `Esc`를 누르면 실행 중인 엔진을 중단합니다. 취소 때문에 예비 엔진을 실행하거나 오류를 기록하지 않습니다. 번역이 끝나면 `Esc`는 원래 앱에서 평소대로 작동합니다.
-- **기록 없음** — 번역한 글은 파일에도, Windows 클립보드 기록(`Win+V`)에도 남지 않습니다.
+- **기록 최소화** — 엔진 세션 저장을 끄고 임시 파일은 작업 후 삭제를 시도합니다. 클립보드와 오류 기록에 관한 주의사항은 아래를 참고하세요.
 - **원클릭 업데이트** — 새 버전이 나오면 알림 영역 메뉴와 설정 창에 `업데이트` 버튼이 뜹니다. 누르면 받아서 바꾸고 다시 실행합니다.
 - **화면 언어** — 한국어, English, 简体中文, 日本語. 일반 탭에서 저장하거나 알림 영역 메뉴에서 바꿉니다.
-
-## 시작하기
-
-1. **번역 엔진 준비** — 둘 중 하나 이상이 설치·로그인돼 있어야 합니다.
-   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code): 설치 후 터미널에서 `claude` 실행 → 로그인
-   - [Codex CLI](https://github.com/openai/codex): 설치 후 `codex login`
-2. **[최신 버전 다운로드](https://github.com/HSoo-Kim/inline-translator/releases/latest)** → `inline-translator-win-x64.zip`을 풀고 `InlineTranslator.exe` 실행.
-3. 처음 실행하면 설정 창이 뜹니다. `엔진` 탭에서 `테스트`로 번역을 확인하고, `번역` 탭에서 언어·단축키를 설정한 뒤 `저장`.
-
-이후에는 알림 영역(시계 옆)에서 조용히 실행됩니다. 아이콘을 클릭하면 설정, 우클릭하면 일시 중지·종료 메뉴가 나옵니다.
-
-Windows 11 x64용이고, 실행 파일에 .NET이 포함돼 있어 따로 설치할 것은 없습니다. 코드 서명이 없어서 처음 실행할 때 Windows가 경고를 띄울 수 있습니다.
 
 ## 설정
 
@@ -77,9 +85,10 @@ Windows 11 x64용이고, 실행 파일에 .NET이 포함돼 있어 따로 설치
 
 ## 데이터와 개인정보
 
-- 번역할 글은 **선택한 엔진(Claude Code 또는 Codex)으로만** 보내집니다. 앱이 직접 다른 서버로 보내는 것은 없습니다.
-- 엔진은 대화를 저장하지 않는 옵션으로 실행됩니다(`--no-session-persistence`, `--ephemeral`). 도구 사용은 꺼져 있고, 빈 임시 폴더에서 실행 후 바로 지웁니다.
-- 오류 기록(`%LOCALAPPDATA%\InlineTranslator\error.log`)에는 오류 내용만 남고 번역한 글은 남지 않습니다.
+- 번역할 글은 **선택한 엔진(Claude Code 또는 Codex)**으로 보내지며, 해당 제공자의 데이터 정책이 적용됩니다.
+- 엔진은 세션 저장을 끄고(`--no-session-persistence`, `--ephemeral`) 도구 사용을 제한해 임시 폴더에서 실행합니다. Codex는 번역 결과를 임시 파일에 기록합니다. 앱은 작업 후 폴더 삭제를 시도하지만, 삭제 실패나 비정상 종료 시 파일이 남을 수 있습니다.
+- 선택한 원문을 읽을 때 복사 기능을 사용하므로 원문이 Windows 클립보드 기록이나 다른 클립보드 관리자에 남을 수 있습니다. 결과를 붙여 넣을 때는 Windows 기록·클라우드 동기화 제외를 요청하고, 가능한 경우 기존 클립보드를 복원합니다.
+- 오류 기록(`%LOCALAPPDATA%\InlineTranslator\error.log`)에는 엔진의 오류 메시지가 포함될 수 있습니다. 엔진이 오류 메시지에 텍스트를 포함하면 해당 내용도 기록될 수 있습니다.
 - 새 버전 확인은 GitHub(`api.github.com`)에서 최신 릴리스 정보만 읽습니다. 업데이트 파일은 GitHub가 알려 주는 SHA-256과 맞을 때만 설치합니다. 설정에서 끌 수 있습니다.
 - 설정 파일: `%LOCALAPPDATA%\InlineTranslator\settings.json`
 - 번역은 쓰고 있는 구독의 사용량으로 계산됩니다.

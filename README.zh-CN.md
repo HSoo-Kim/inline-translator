@@ -2,13 +2,21 @@
 
 <h1 align="center">Inline Translator</h1>
 
+<p align="center"><b>在输入处直接翻译，阅读时用气泡查看。</b></p>
+
+<p align="center">
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest/download/inline-translator-win-x64.zip"><img src="https://img.shields.io/badge/Download-Windows%20x64-000000?style=for-the-badge" alt="下载 Windows x64 版 Inline Translator"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest"><img src="https://img.shields.io/github/v/release/HSoo-Kim/inline-translator?style=for-the-badge&label=Release&color=007ec6" alt="最新发布版本"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases"><img src="https://img.shields.io/github/downloads/HSoo-Kim/inline-translator/total?style=for-the-badge&label=Downloads&color=1E90FF" alt="GitHub Release 累计下载量"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/stargazers"><img src="https://img.shields.io/github/stars/HSoo-Kim/inline-translator?style=for-the-badge&label=Stars&logo=github&logoColor=white&color=000000" alt="GitHub Stars"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-3DA639?style=for-the-badge" alt="MIT 许可证"></a>
+</p>
+
 <p align="center"><a href="README.md">한국어</a> · <a href="README.en.md">English</a> · <b>简体中文</b> · <a href="README.ja.md">日本語</a></p>
+<p align="center"><sub>Windows 11 x64 · 内含 .NET · 需要 Claude Code 或 Codex CLI</sub></p>
 
-为了翻译一句话，打开 ChatGPT 或 Claude、粘贴、复制、再切回来，是不是很麻烦？
-
-现在只需**在输入的地方按一次快捷键**，几秒内原文就会被替换为译文。
-
-> **无需选择原文语言。** 韩语、日语，或多种语言混写，都会自动识别并翻译成你设定的语言。你只需决定“翻译成什么”。
+用快捷键原地翻译选中的文本，或在气泡中查看不可编辑文本的译文。
+原文语言会自动判断，目标语言可在设置中选择。
 
 <p align="center"><img src="docs/images/demo-en.gif" width="800" alt="在聊天输入框输入韩文后按 Ctrl+Alt+T，文本变成英文"></p>
 <p align="center"><sub>使用真实 Claude Haiku 翻译结果重现的演示。</sub></p>
@@ -18,13 +26,25 @@
 | 这样操作 | 翻译结果 |
 |---|---|
 | 💬 在聊天输入框中**直接按 `Ctrl+Alt+T`** | 翻译输入框中的**全部内容** |
-| 🖱️ **拖动选中后按 `Ctrl+Alt+T`** | **只翻译选中的部分**（聊天、邮件、文档等任何地方） |
+| 🖱️ **拖动选中后按 `Ctrl+Alt+T`** | **只翻译选中的部分**（聊天、邮件、文档等） |
 | **选中文字后按 `Ctrl+Alt+R`** | **双向阅读翻译**，只显示气泡，不修改原文 |
 | **翻译中按 `Esc`** | 取消当前翻译 |
 
-- 2～4 秒后译文替换原文。不满意就按 `Ctrl+Z`。
+- 译文会替换原文，不满意可按 `Ctrl+Z` 撤销。翻译时间因引擎和输入内容而异。
 - 不选中即翻译整个输入框的应用：Telegram、KakaoTalk、Slack、Discord、WhatsApp、LINE、Teams、Signal。可在设置中增减。
 - 其他应用（Word、浏览器等）只翻译选中部分，不会误换整个文档。
+
+## 开始使用
+
+1. **准备翻译引擎** —— 至少安装并登录以下之一：
+   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)：安装后在终端运行 `claude` 并登录
+   - [Codex CLI](https://github.com/openai/codex)：安装后运行 `codex login`
+2. **[下载最新版本](https://github.com/HSoo-Kim/inline-translator/releases/latest)**，解压 `inline-translator-win-x64.zip`，运行 `InlineTranslator.exe`。
+3. 首次运行会打开设置。在“引擎”中测试翻译，在“翻译”中选择语言和快捷键，然后“保存”。
+
+之后它会在通知区域静默运行。单击图标打开设置，右键可暂停或退出。
+
+适用于 Windows 11 x64，可执行文件已包含 .NET，无需额外安装。尚未进行代码签名，首次运行时 Windows 可能会提示警告。
 
 ## 功能
 
@@ -41,21 +61,9 @@
 - **保护输入** —— 翻译期间输入文字或点击移动光标后，不覆盖原文，只显示翻译气泡。粘贴前会再次确认选中的文字未改变。整框翻译也不会重新全选并覆盖新输入的内容。
 - **阅读快捷键** —— `Ctrl+Alt+R` 也支持双向翻译。我的语言写的文本译成阅读设置中所选的语言，其他语言译成我的语言。只显示气泡，不粘贴。可在设置中选择目标语言、更改快捷键或关闭。
 - **Esc 取消** —— 翻译中按 `Esc` 停止正在运行的引擎，不启动备用引擎，也不记录错误。翻译结束后，Esc 恢复在原应用中的正常作用。
-- **不留记录** —— 译文不会写入文件，也不会进入 Windows 剪贴板历史（`Win+V`）。
+- **尽量减少记录** —— 关闭引擎会话保存，并在使用后尝试删除临时文件。剪贴板和错误日志的注意事项见下文。
 - **一键更新** —— 有新版本时，托盘菜单和设置中会出现“更新”按钮，点击即可下载、替换并重启。
 - **界面语言** —— 한국어、English、简体中文、日本語。可在“常规”中选择并保存，或从托盘菜单切换。
-
-## 开始使用
-
-1. **准备翻译引擎** —— 至少安装并登录以下之一：
-   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)：安装后在终端运行 `claude` 并登录
-   - [Codex CLI](https://github.com/openai/codex)：安装后运行 `codex login`
-2. **[下载最新版本](https://github.com/HSoo-Kim/inline-translator/releases/latest)**，解压 `inline-translator-win-x64.zip`，运行 `InlineTranslator.exe`。
-3. 首次运行会打开设置。在“引擎”中测试翻译，在“翻译”中选择语言和快捷键，然后“保存”。
-
-之后它会在通知区域静默运行。单击图标打开设置，右键可暂停或退出。
-
-适用于 Windows 11 x64，可执行文件已包含 .NET，无需额外安装。尚未进行代码签名，首次运行时 Windows 可能会提示警告。
 
 ## 设置
 
@@ -77,9 +85,10 @@
 
 ## 数据与隐私
 
-- 文本**只发送给你选择的引擎**（Claude Code 或 Codex），应用本身不会发送到其他地方。
-- 引擎以不保存会话的方式运行（`--no-session-persistence`、`--ephemeral`），禁用工具，并在用后即删的空临时文件夹中运行。
-- 错误日志（`%LOCALAPPDATA%\InlineTranslator\error.log`）只记录错误信息，不记录你的文本。
+- 文本会发送给**你选择的引擎**（Claude Code 或 Codex），并适用该服务提供商的数据政策。
+- 引擎在临时文件夹中运行，关闭会话保存（`--no-session-persistence`、`--ephemeral`）并限制工具使用。Codex 会将译文写入临时文件。应用会在结束后尝试删除文件夹，但清理失败或异常退出时文件可能保留。
+- 读取选中的原文需要复制，因此原文可能出现在 Windows 剪贴板历史或其他剪贴板管理器中。粘贴译文时，应用会请求将其排除在 Windows 剪贴板历史和云同步之外，并在可能时恢复原剪贴板。
+- 错误日志（`%LOCALAPPDATA%\InlineTranslator\error.log`）可能包含引擎的错误信息。如果错误信息中包含文本，该文本也可能被记录。
 - 检查更新只从 GitHub（`api.github.com`）读取最新版本信息；只有 SHA-256 与 GitHub 公布的一致时才安装。可在设置中关闭。
 - 设置文件：`%LOCALAPPDATA%\InlineTranslator\settings.json`
 - 翻译会计入你的订阅用量。
