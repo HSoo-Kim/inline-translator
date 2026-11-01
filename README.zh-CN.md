@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest/download/inline-translator-win-x64.zip"><img src="https://img.shields.io/badge/Download-Windows%20x64-000000?style=for-the-badge" alt="下载 Windows x64 版 Inline Translator"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.0/inline-translator-mac.dmg"><img src="https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="下载 macOS 版 Inline Translator"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest"><img src="https://img.shields.io/github/v/release/HSoo-Kim/inline-translator?style=for-the-badge&label=Release&color=007ec6" alt="最新发布版本"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/releases"><img src="https://img.shields.io/github/downloads/HSoo-Kim/inline-translator/total?style=for-the-badge&label=Downloads&color=1E90FF" alt="GitHub Release 累计下载量"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/stargazers"><img src="https://img.shields.io/github/stars/HSoo-Kim/inline-translator?style=for-the-badge&label=Stars&logo=github&logoColor=white&color=000000" alt="GitHub Stars"></a>
@@ -13,7 +14,7 @@
 </p>
 
 <p align="center"><a href="README.md">한국어</a> · <a href="README.en.md">English</a> · <b>简体中文</b> · <a href="README.ja.md">日本語</a></p>
-<p align="center"><sub>Windows 11 x64 · 内含 .NET · 需要 Claude Code 或 Codex CLI</sub></p>
+<p align="center"><sub>Windows 11 x64 · macOS 13 或更高版本（Apple Silicon 和 Intel）· 需要 Claude Code 或 Codex CLI</sub></p>
 
 用快捷键原地翻译选中的文本，或在气泡中查看不可编辑文本的译文。
 原文语言会自动判断，目标语言可在设置中选择。
@@ -45,6 +46,31 @@
 之后它会在通知区域静默运行。单击图标打开设置，右键可暂停或退出。
 
 适用于 Windows 11 x64，可执行文件已包含 .NET，无需额外安装。尚未进行代码签名，首次运行时 Windows 可能会提示警告。
+
+## macOS
+
+1. **准备翻译引擎** —— 与 Windows 相同：在终端运行 `claude` 并登录，或运行 `codex login`。
+2. **[下载 macOS 版](https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.0/inline-translator-mac.dmg)**，打开 `inline-translator-mac.dmg`，将 `Inline Translator` 拖入“应用程序”（`Applications`）文件夹。
+3. 应用尚未经过 Apple 公证，因此 macOS 会阻止首次启动。请在**系统设置 → 隐私与安全性**靠近底部的位置点击 `仍要打开`。
+4. 点击设置顶部横幅中的 `打开系统设置`，在**辅助功能**中开启 Inline Translator。应用需要此权限来复制选中的文本并粘贴译文。
+5. 在“引擎”标签页中点击 `测试`，在“翻译”标签页中选择语言和快捷键，然后 `保存`。
+
+之后它会在菜单栏中运行。点击图标可打开设置、暂停、切换界面语言、更新或退出。
+
+| Windows | macOS |
+|---|---|
+| `Ctrl+Alt+T` 输入翻译 | `⌃⌥T` (Control+Option+T) |
+| `Ctrl+Alt+R` 阅读翻译 | `⌃⌥R` |
+| `Ctrl+Z` 撤销 | `⌘Z` |
+| 通知区域图标 | 菜单栏图标 |
+| 开机启动 | 登录时打开 |
+
+- 支持 Apple Silicon 和 Intel 的通用应用，适用于 macOS 13 Ventura 或更高版本。
+- 默认整框翻译应用新增“信息”（iMessage）。应用通过 bundle ID 识别；`+ 添加应用` 会列出已安装和正在运行的应用。
+- Codex 模型列表始终包含 GPT-6.1-Terra，即使 Codex CLI 的模型缓存尚未列出它。
+- 更新来自带有 `mac-v…` 标签的发布版本，Windows 版不会将其识别为自己的更新。各版本使用同一签名，因此更新后可保留辅助功能权限。
+- 粘贴译文时，剪贴板内容仅保留在当前 Mac 上（不使用通用剪贴板），并带有标记，让剪贴板管理器跳过记录；在可能时恢复原剪贴板。复制原文时，剪贴板管理器仍可能记录。
+- 设置文件：`~/Library/Application Support/InlineTranslator/settings.json`；错误日志：`~/Library/Logs/InlineTranslator/error.log`
 
 ## 功能
 
@@ -114,6 +140,26 @@
 ```
 
 演示 GIF 由 `docs/demo/demo.html` 逐帧渲染生成。不依赖任何 NuGet 包，只使用 .NET Windows Forms 和 Win32 API。
+
+### macOS
+
+需要 macOS 13 或更高版本及 Xcode Command Line Tools（`xcode-select --install`）。无需 Xcode 项目。
+
+```bash
+macos/build.sh                            # universal app + unit tests → macos/build/Inline Translator.app
+macos/build.sh --preview                  # render Settings, bubble and notices to PNG without showing anything
+macos/build.sh --package                  # artifacts/inline-translator-mac.dmg and its SHA-256
+macos/build.sh --create-signing-identity  # create the local release-signing certificate once
+```
+
+```
+macos/Sources/Core/  settings, hotkeys, translation, engines, updates (testable without AppKit)
+macos/Sources/App/   menu bar, global hotkeys, clipboard and Accessibility, Settings (SwiftUI), bubble
+macos/Tests/         settings, hotkey, engine, process, update and UI-string regression tests
+macos/Preview/       offscreen rendering and real engine checks (preview translate claude claude-haiku-5-5 en ko "Hello")
+```
+
+发布版本使用自签名证书签名。沿用同一证书可在更新后保留辅助功能权限；使用 ad-hoc 签名时，每次构建后都需要重新授予权限。
 
 ## 许可证
 

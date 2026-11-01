@@ -5,3 +5,4 @@ artifacts/
 *.user
 *.log
 .omo/
+macos/build/
