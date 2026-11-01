@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest/download/inline-translator-win-x64.zip"><img src="https://img.shields.io/badge/Download-Windows%20x64-000000?style=for-the-badge" alt="Windows x64용 Inline Translator 다운로드"></a>
-  <a href="https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.0/inline-translator-mac.dmg"><img src="https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS용 Inline Translator 다운로드"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.1/inline-translator-mac.dmg"><img src="https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS용 Inline Translator 다운로드"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest"><img src="https://img.shields.io/github/v/release/HSoo-Kim/inline-translator?style=for-the-badge&label=Release&color=007ec6" alt="최신 릴리즈"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/releases"><img src="https://img.shields.io/github/downloads/HSoo-Kim/inline-translator/total?style=for-the-badge&label=Downloads&color=1E90FF" alt="GitHub 릴리즈 누적 다운로드"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/stargazers"><img src="https://img.shields.io/github/stars/HSoo-Kim/inline-translator?style=for-the-badge&label=Stars&logo=github&logoColor=white&color=000000" alt="GitHub Stars"></a>
@@ -50,7 +50,7 @@ Windows 11 x64용이고, 실행 파일에 .NET이 포함돼 있어 따로 설치
 ## macOS
 
 1. **번역 엔진 준비** — Windows와 같습니다. 터미널에서 `claude`로 로그인하거나 `codex login`.
-2. **[macOS용 다운로드](https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.0/inline-translator-mac.dmg)** → `inline-translator-mac.dmg`를 열고 `Inline Translator`를 `응용 프로그램` 폴더로 끌어 놓습니다.
+2. **[macOS용 다운로드](https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.1/inline-translator-mac.dmg)** → `inline-translator-mac.dmg`를 열고 `Inline Translator`를 `응용 프로그램` 폴더로 끌어 놓습니다.
 3. 처음 열면 Apple 공증을 받지 않은 앱이라 macOS가 실행을 막습니다. **시스템 설정 → 개인정보 보호 및 보안** 아래쪽에서 `그래도 열기`를 누르세요.
 4. 설정 창 위쪽 안내의 `시스템 설정 열기`를 눌러 **손쉬운 사용**에서 Inline Translator를 켭니다. 선택한 글을 복사하고 번역문을 붙여 넣는 데 필요합니다.
 5. `엔진` 탭에서 `테스트`로 번역을 확인하고, `번역` 탭에서 언어·단축키를 설정한 뒤 `저장`.

@@ -9,14 +9,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     init(app: AppController) {
         model = SettingsModel(app: app)
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 700),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 720),
                               styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
         window.title = "Inline Translator – " + app.text.t("Settings")
-        window.contentMinSize = NSSize(width: 520, height: 420)
         window.isReleasedWhenClosed = false
-        window.setFrameAutosaveName("InlineTranslatorSettings")
         super.init(window: window)
-        window.contentViewController = NSHostingController(rootView: SettingsView(model: model))
+        let hosting = NSHostingController(rootView: SettingsView(model: model))
+        // The view only enforces its minimum; otherwise the window would shrink to the minimum on open.
+        hosting.sizingOptions = [.minSize]
+        window.contentViewController = hosting
+        let available = NSScreen.main?.visibleFrame.height ?? 900
+        window.setContentSize(NSSize(width: 640, height: min(720, available - 80)))
         window.delegate = self
         model.close = { [weak self] in self?.close() }
     }

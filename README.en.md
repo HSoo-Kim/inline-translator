@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest/download/inline-translator-win-x64.zip"><img src="https://img.shields.io/badge/Download-Windows%20x64-000000?style=for-the-badge" alt="Download Inline Translator for Windows x64"></a>
-  <a href="https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.0/inline-translator-mac.dmg"><img src="https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download Inline Translator for macOS"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.1/inline-translator-mac.dmg"><img src="https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download Inline Translator for macOS"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest"><img src="https://img.shields.io/github/v/release/HSoo-Kim/inline-translator?style=for-the-badge&label=Release&color=007ec6" alt="Latest release"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/releases"><img src="https://img.shields.io/github/downloads/HSoo-Kim/inline-translator/total?style=for-the-badge&label=Downloads&color=1E90FF" alt="Total GitHub release downloads"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/stargazers"><img src="https://img.shields.io/github/stars/HSoo-Kim/inline-translator?style=for-the-badge&label=Stars&logo=github&logoColor=white&color=000000" alt="GitHub stars"></a>
@@ -50,7 +50,7 @@ Built for Windows 11 x64. The executable includes .NET, so nothing else to insta
 ## macOS
 
 1. **Set up an engine** — same as on Windows: sign in with `claude` in a terminal, or run `codex login`.
-2. **[Download for macOS](https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.0/inline-translator-mac.dmg)**, open `inline-translator-mac.dmg` and drag `Inline Translator` into `Applications`.
+2. **[Download for macOS](https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.1/inline-translator-mac.dmg)**, open `inline-translator-mac.dmg` and drag `Inline Translator` into `Applications`.
 3. The app is not notarized by Apple, so macOS blocks the first launch. Click `Open Anyway` near the bottom of **System Settings → Privacy & Security**.
 4. Click `Open System Settings` in the banner at the top of Settings and turn on Inline Translator under **Accessibility**. It needs this to copy the selected text and paste the translation.
 5. Use `Test` in Engines, choose languages and hotkeys in Translation, then `Save`.

@@ -71,12 +71,23 @@ final class RecorderView: NSView {
         setAccessibilityValue(value.isEmpty ? placeholder : Hotkey.display(value))
     }
 
-    override var acceptsFirstResponder: Bool { true }
-    override var canBecomeKeyView: Bool { true }
+    // Only a deliberate click or accessibility press starts recording; otherwise the window would focus the
+    // first field on open, pause the global hotkeys and record whatever key comes next.
+    private var armed = false
+    override var acceptsFirstResponder: Bool { armed }
+    override var canBecomeKeyView: Bool { false }
 
-    override func mouseDown(with event: NSEvent) { window?.makeFirstResponder(self) }
+    override func mouseDown(with event: NSEvent) { startRecording() }
 
-    override func accessibilityPerformPress() -> Bool { window?.makeFirstResponder(self) ?? false }
+    override func accessibilityPerformPress() -> Bool { startRecording() }
+
+    @discardableResult
+    private func startRecording() -> Bool {
+        armed = true
+        if window?.makeFirstResponder(self) == true { return true }
+        armed = false
+        return false
+    }
 
     override func becomeFirstResponder() -> Bool {
         recording = true
@@ -92,6 +103,7 @@ final class RecorderView: NSView {
     override func resignFirstResponder() -> Bool {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
+        armed = false
         recording = false
         onFocus(false)
         return true
