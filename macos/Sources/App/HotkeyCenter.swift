@@ -27,7 +27,7 @@ final class HotkeyCenter {
         var reference: EventHotKeyRef?
         let status = RegisterEventHotKey(hotkey.keyCode, hotkey.modifiers.carbonFlags,
                                          EventHotKeyID(signature: HotkeyCenter.signature, id: id),
-                                         GetApplicationEventTarget(), 0, &reference)
+                                         GetApplicationEventTarget(), OptionBits(kEventHotKeyExclusive), &reference)
         guard status == noErr, let reference else { return false }
         registered[id] = reference
         return true

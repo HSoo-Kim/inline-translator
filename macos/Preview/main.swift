@@ -1,15 +1,19 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
+import WebKit
 
 // Development tool, not shipped:
 //   preview render <folder>                                renders Settings, bubble, indicator and toast offscreen
 //   preview translate <claude|codex> <model> <target> <my language> <text>   runs a real engine translation
 //   preview install-update <copy of Inline Translator.app>  installs the latest GitHub macOS release into that copy
+//   preview context                                        reads surrounding context from an offscreen text view and web page
+//   preview keys                                           shows which keys Cmd+A/C/V use in the current and other layouts
 // Nothing is shown on screen and no keys are sent, so it never disturbs the desktop in use.
 
 let arguments = CommandLine.arguments
-guard arguments.count >= 3 else {
-    FileHandle.standardError.write(Data("usage: preview render <folder> | translate <provider> <model> <target> <home> <text> | install-update <app>\n".utf8))
+guard arguments.count >= 2 else {
+    FileHandle.standardError.write(Data("usage: preview render <folder> | translate <provider> <model> <target> <home> <text> | install-update <app> | context\n".utf8))
     exit(2)
 }
 
@@ -71,26 +75,27 @@ enum Renderer {
     }
 }
 
-func translate(_ arguments: [String]) async throws {
+@Sendable func translate(_ arguments: [String]) async throws {
     guard arguments.count >= 7, let provider = Provider(rawValue: arguments[2]), let target = Languages.find(arguments[4]) else {
-        throw Failure("usage: preview translate <claude|codex> <model> <target> <my language> <text>")
+        throw Failure("usage: preview translate <claude|codex> <model> <target> <my language> <text> [<text before> <text after>]")
     }
     let environment = EngineEnvironment(shellPath: await ShellPath.load())
     var settings = AppSettings().normalized()
     settings.primary = EngineChoice(provider: provider, model: arguments[3])
     settings.fallback = .none
     settings.homeLanguage = arguments[5]
+    let context = arguments.count >= 9 ? ContextWindow.clip(before: arguments[7], after: arguments[8]) : nil
     let started = Date()
     let result = try await Translator { engine, instructions, text in
         try await EngineCli.translate(engine, instructions: instructions, text: text, environment: environment)
-    }.translate(settings, target: target, text: arguments[6])
+    }.translate(settings, target: target, text: arguments[6], context: context)
     print("engine: \(result.engine.displayName)")
     print("output: \((result.output ?? target).code)")
     print(String(format: "seconds: %.1f", Date().timeIntervalSince(started)))
     print("text: \(result.text)")
 }
 
-func installUpdate(_ arguments: [String]) async throws {
+@Sendable func installUpdate(_ arguments: [String]) async throws {
     let bundle = URL(fileURLWithPath: arguments[2]).standardizedFileURL
     func version() throws -> String {
         let data = try Data(contentsOf: bundle.appendingPathComponent("Contents/Info.plist"))
@@ -103,14 +108,135 @@ func installUpdate(_ arguments: [String]) async throws {
     print("after update: \(try version())")
 }
 
+/// The Cmd+A/C/V key codes per layout, compared with what each layout must use.
+func checkKeys() throws {
+    let us = [kVK_ANSI_A, kVK_ANSI_C, kVK_ANSI_V]
+    let expected: [String: [Int]] = [
+        "com.apple.keylayout.US": us, "com.apple.keylayout.ABC": us,
+        "com.apple.keylayout.French": [kVK_ANSI_Q, kVK_ANSI_C, kVK_ANSI_V],
+        "com.apple.keylayout.Dvorak": [kVK_ANSI_A, kVK_ANSI_I, kVK_ANSI_Period],
+        "com.apple.keylayout.DVORAK-QWERTYCMD": us,
+        "com.apple.keylayout.German": us,
+    ]
+    var failures: [String] = []
+    for (id, codes) in expected.sorted(by: { $0.key < $1.key }) {
+        let filter = [kTISPropertyInputSourceID as String: id] as CFDictionary
+        guard let sources = TISCreateInputSourceList(filter, true)?.takeRetainedValue() as? [TISInputSource], let source = sources.first else {
+            print("\(id): layout not installed")
+            continue
+        }
+        let actual = [KeyCode.command("a", fallback: kVK_ANSI_A, layout: source), KeyCode.command("c", fallback: kVK_ANSI_C, layout: source),
+                      KeyCode.command("v", fallback: kVK_ANSI_V, layout: source)]
+        print("\(id): \(actual)\(actual == codes ? "" : " expected \(codes)")")
+        if actual != codes { failures.append(id) }
+    }
+    print("current: \([KeyCode.a, KeyCode.c, KeyCode.v])")
+    if !failures.isEmpty { throw Failure("Wrong keys for \(failures.joined(separator: ", "))") }
+}
+
+/// Reads surrounding context the way the app does: from another process, through Accessibility. A child process shows
+/// a text view and a web page in a window placed far off screen, with a sentence selected in each.
+@MainActor
+enum ContextCheck {
+    static let paragraphs = ["The release checklist is attached below.", "Last week we agreed to ship on Friday.",
+                             "Let's push it to next week.", "Tell me if anything else blocks it."]
+    static var selected: String { paragraphs[2] }
+
+    static func host() -> Never {
+        _ = NSApplication.shared
+        // Accessory: no Dock icon and never activated, but AppKit still serves its Accessibility tree.
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.finishLaunching()
+        let window = NSWindow(contentRect: CGRect(x: -30000, y: -30000, width: 600, height: 400), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        let textView = NSTextView(frame: CGRect(x: 0, y: 0, width: 600, height: 150))
+        textView.string = paragraphs.joined(separator: "\n")
+        let web = WKWebView(frame: CGRect(x: 0, y: 0, width: 600, height: 250))
+        stack.addArrangedSubview(textView)
+        stack.addArrangedSubview(web)
+        window.contentView = stack
+        window.orderFrontRegardless()
+        textView.setSelectedRange((textView.string as NSString).range(of: selected))
+        let html = paragraphs.enumerated().map { $0.offset == 2 ? "<p><span id=t>\($0.element)</span></p>" : "<p>\($0.element)</p>" }
+        web.loadHTMLString("<html><body>" + html.joined() + "</body></html>", baseURL: nil)
+        let deadline = Date().addingTimeInterval(15)
+        while web.isLoading && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+        var selectedOnPage = false
+        web.evaluateJavaScript("var r=document.createRange();r.selectNodeContents(document.getElementById('t').firstChild);" +
+                               "var s=getSelection();s.removeAllRanges();s.addRange(r);s.toString()") { _, _ in selectedOnPage = true }
+        while !selectedOnPage && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+        print("ready")
+        fflush(stdout)
+        while true { RunLoop.main.run(until: Date().addingTimeInterval(1)) }
+    }
+
+    static func run() throws {
+        let host = Process()
+        host.executableURL = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0])
+        host.arguments = ["context-host"]
+        let output = Pipe()
+        host.standardOutput = output
+        try host.run()
+        defer { host.terminate() }
+        var buffer = Data()
+        while !String(decoding: buffer, as: UTF8.self).contains("ready") {
+            let chunk = output.fileHandleForReading.availableData
+            if chunk.isEmpty { throw Failure("The context host exited early.") }
+            buffer.append(chunk)
+        }
+        var found: [String: AXUIElement] = [:]
+        func walk(_ element: AXUIElement, _ depth: Int) {
+            guard depth < 14 else { return }
+            let role = Accessibility.attribute(element, kAXRoleAttribute) as? String ?? "?"
+            if ["AXTextArea", "AXWebArea"].contains(role), found[role] == nil { found[role] = element }
+            let children = Accessibility.attribute(element, kAXChildrenAttribute) as? [AXUIElement]
+                ?? Accessibility.attribute(element, kAXWindowsAttribute) as? [AXUIElement] ?? []
+            for child in children { walk(child, depth + 1) }
+        }
+        // The tree fills in shortly after the host reports ready.
+        for _ in 0..<20 where found.count < 2 {
+            walk(Accessibility.application(host.processIdentifier), 0)
+            if found.count < 2 { Thread.sleep(forTimeInterval: 0.5) }
+        }
+        var missing: [String] = []
+        for role in ["AXTextArea", "AXWebArea"] {
+            if let element = found[role], let context = Accessibility.selectionContext(element, selected: selected) {
+                print("\(role): before=\(context.before.debugDescription) after=\(context.after.debugDescription)")
+            } else {
+                print("\(role): \(found[role] == nil ? "element not found" : "no context")")
+                missing.append(role)
+            }
+        }
+        if !missing.isEmpty { throw Failure("No context from \(missing.joined(separator: ", "))") }
+    }
+}
+
+func fail(_ error: Error) -> Never {
+    FileHandle.standardError.write(Data("preview failed: \(error.localizedDescription) \(error)\n".utf8))
+    exit(1)
+}
+
+// Synchronous top level, so nested run loops still drain the main queue (WebKit and AppKit callbacks rely on it).
+func runAsync(_ body: @escaping @Sendable () async throws -> Void) -> Never {
+    Task {
+        do { try await body() } catch { fail(error) }
+        exit(0)
+    }
+    while true { RunLoop.main.run(until: Date().addingTimeInterval(1)) }
+}
+
 do {
     switch arguments[1] {
-    case "render": try await MainActor.run { try Renderer.render(URL(fileURLWithPath: arguments[2])) }
-    case "translate": try await translate(arguments)
-    case "install-update": try await installUpdate(arguments)
+    case "render": try MainActor.assumeIsolated { try Renderer.render(URL(fileURLWithPath: arguments[2])) }
+    case "context": try MainActor.assumeIsolated { try ContextCheck.run() }
+    case "keys": try checkKeys()
+    case "context-host": MainActor.assumeIsolated { ContextCheck.host() }
+    case "translate": runAsync { try await translate(arguments) }
+    case "install-update": runAsync { try await installUpdate(arguments) }
     default: throw Failure("unknown command \(arguments[1])")
     }
 } catch {
-    FileHandle.standardError.write(Data("preview failed: \(error.localizedDescription) \(error)\n".utf8))
-    exit(1)
+    fail(error)
 }

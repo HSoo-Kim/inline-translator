@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import Security
 
 struct UpdateFailure: LocalizedError {
     let message: String
@@ -35,12 +36,32 @@ enum UpdateInstaller {
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    static func install(_ release: ReleaseInfo, into bundle: URL, bundleID: String,
+    /// The signature requirement a replacement must meet: the installed app's own designated requirement, so updates
+    /// keep the signing identity (and with it the Accessibility permission). Ad hoc builds can only be replaced by hand.
+    static func designatedRequirement(of bundle: URL) -> SecRequirement? {
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(bundle as CFURL, [], &code) == errSecSuccess, let code else { return nil }
+        var requirement: SecRequirement?
+        guard SecCodeCopyDesignatedRequirement(code, [], &requirement) == errSecSuccess else { return nil }
+        return requirement
+    }
+
+    static func satisfies(_ bundle: URL, _ requirement: SecRequirement) -> Bool {
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(bundle as CFURL, [], &code) == errSecSuccess, let code else { return false }
+        let flags = SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSStrictValidate | kSecCSCheckNestedCode)
+        return SecStaticCodeCheckValidity(code, flags, requirement) == errSecSuccess
+    }
+
+    static func install(_ release: ReleaseInfo, into bundle: URL, bundleID: String, requirement: SecRequirement? = nil,
                         download: (URL) async throws -> URL = UpdateInstaller.download) async throws {
         guard let packageURL = release.packageURL, let expected = release.packageSHA256 else {
             throw UpdateFailure(message: "The release has no verifiable macOS package.")
         }
         let manager = FileManager.default
+        guard let requirement = requirement ?? designatedRequirement(of: bundle) else {
+            throw UpdateFailure(message: "The signature of this copy cannot be read, so the update cannot be checked against it.")
+        }
         let image = try await download(packageURL)
         defer { try? manager.removeItem(at: image) }
         guard try sha256(of: image) == expected.lowercased() else {
@@ -58,7 +79,9 @@ enum UpdateInstaller {
             guard Bundle(url: candidate)?.bundleIdentifier == bundleID else {
                 throw UpdateFailure(message: "The package does not contain \(appName).")
             }
-            try await run("/usr/bin/codesign", ["--verify", "--deep", "--strict", candidate.path])
+            guard satisfies(candidate, requirement) else {
+                throw UpdateFailure(message: "The downloaded app is not signed like this one, so it was not installed.")
+            }
             try await run("/usr/bin/ditto", [candidate.path, staged.path])
         } catch {
             _ = try? await run("/usr/bin/hdiutil", ["detach", mount.path, "-force"])

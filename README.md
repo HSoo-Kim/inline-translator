@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest/download/inline-translator-win-x64.zip"><img src="https://img.shields.io/badge/Download-Windows%20x64-000000?style=for-the-badge" alt="Windows x64용 Inline Translator 다운로드"></a>
-  <a href="https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.1/inline-translator-mac.dmg"><img src="https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS용 Inline Translator 다운로드"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.2.0/inline-translator-mac.dmg"><img src="https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS용 Inline Translator 다운로드"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest"><img src="https://img.shields.io/github/v/release/HSoo-Kim/inline-translator?style=for-the-badge&label=Release&color=007ec6" alt="최신 릴리즈"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/releases"><img src="https://img.shields.io/github/downloads/HSoo-Kim/inline-translator/total?style=for-the-badge&label=Downloads&color=1E90FF" alt="GitHub 릴리즈 누적 다운로드"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/stargazers"><img src="https://img.shields.io/github/stars/HSoo-Kim/inline-translator?style=for-the-badge&label=Stars&logo=github&logoColor=white&color=000000" alt="GitHub Stars"></a>
@@ -50,7 +50,7 @@ Windows 11 x64용이고, 실행 파일에 .NET이 포함돼 있어 따로 설치
 ## macOS
 
 1. **번역 엔진 준비** — Windows와 같습니다. 터미널에서 `claude`로 로그인하거나 `codex login`.
-2. **[macOS용 다운로드](https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.1/inline-translator-mac.dmg)** → `inline-translator-mac.dmg`를 열고 `Inline Translator`를 `응용 프로그램` 폴더로 끌어 놓습니다.
+2. **[macOS용 다운로드](https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.2.0/inline-translator-mac.dmg)** → `inline-translator-mac.dmg`를 열고 `Inline Translator`를 `응용 프로그램` 폴더로 끌어 놓습니다.
 3. 처음 열면 Apple 공증을 받지 않은 앱이라 macOS가 실행을 막습니다. **시스템 설정 → 개인정보 보호 및 보안** 아래쪽에서 `그래도 열기`를 누르세요.
 4. 설정 창 위쪽 안내의 `시스템 설정 열기`를 눌러 **손쉬운 사용**에서 Inline Translator를 켭니다. 선택한 글을 복사하고 번역문을 붙여 넣는 데 필요합니다.
 5. `엔진` 탭에서 `테스트`로 번역을 확인하고, `번역` 탭에서 언어·단축키를 설정한 뒤 `저장`.
@@ -67,6 +67,7 @@ Windows 11 x64용이고, 실행 파일에 .NET이 포함돼 있어 따로 설치
 
 - Apple Silicon과 Intel을 모두 지원하는 유니버설 앱이며 macOS 13 Ventura 이상에서 동작합니다.
 - 입력창 전체 번역 기본 앱에 메시지(iMessage)가 더해집니다. 앱은 번들 ID로 구분하며, `+ 앱 추가`에서 설치된 앱과 실행 중인 앱을 고릅니다.
+- **앞뒤 문맥 반영** — 드래그한 부분만 번역하되, 앱이 그 앞뒤 글을 알려 주면(텍스트 입력란, 문서 편집기, 웹페이지 등) 앞 1,000자·뒤 500자까지 참고용으로 함께 보내 단어 뜻과 지칭을 문맥에 맞게 옮깁니다. 예를 들어 과일 이야기 뒤의 "배가 너무 커서 다 못 먹었어"는 배(과일)로 번역합니다. 이 문맥도 선택한 엔진으로 전송되며, 설정 → 번역 → `앞뒤 문맥 반영`에서 끌 수 있습니다.
 - Codex 모델 목록에는 Codex CLI의 모델 캐시에 아직 없더라도 GPT-6.1-Terra가 항상 들어 있습니다.
 - 업데이트는 `mac-v`로 시작하는 릴리스에서 받습니다. Windows 앱은 macOS 릴리스를 업데이트로 보지 않습니다. 같은 서명으로 배포해 업데이트한 뒤에도 손쉬운 사용 권한이 유지됩니다.
 - 번역문을 붙여 넣을 때는 클립보드 내용을 이 Mac에만 두고(유니버설 클립보드 제외) 클립보드 관리자가 기록하지 않도록 표시하며, 가능한 경우 기존 클립보드를 복원합니다. 원문을 복사하는 단계는 클립보드 관리자에 남을 수 있습니다.

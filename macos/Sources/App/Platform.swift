@@ -60,6 +60,8 @@ enum LoginItem {
 
     static func set(_ enabled: Bool) throws {
         if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+        // macOS can require the user to allow the login item; show where to do that.
+        if enabled && SMAppService.mainApp.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
     }
 }
 

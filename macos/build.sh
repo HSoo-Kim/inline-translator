@@ -59,7 +59,8 @@ if [[ -f "$stale_map" && -f "$(dirname "$stale_map")/bridging.modulemap" ]]; the
     : > "$build/empty.modulemap"
     printf '{"version":0,"case-sensitive":"false","roots":[{"type":"file","name":"%s","external-contents":"%s"}]}\n' \
         "$stale_map" "$build/empty.modulemap" > "$build/vfs-overlay.yaml"
-    compiler_flags+=(-Xcc -ivfsoverlay -Xcc "$build/vfs-overlay.yaml")
+    # Both flags: -Xcc covers C module imports, -vfsoverlay also covers Swift interfaces rebuilt on demand (WebKit).
+    compiler_flags+=(-vfsoverlay "$build/vfs-overlay.yaml" -Xcc -ivfsoverlay -Xcc "$build/vfs-overlay.yaml")
 fi
 
 core=("$root"/Sources/Core/*.swift)
@@ -76,10 +77,14 @@ compile "$build/tests" "$(uname -m)" "${core[@]}" "$root"/Tests/*.swift
 "$build/tests" "$root/Sources"
 
 echo "Building app…"
+pids=()
 for arch in arm64 x86_64; do
+    rm -f "$build/InlineTranslator-$arch"
     compile "$build/InlineTranslator-$arch" "$arch" "${core[@]}" "${appsources[@]}" "$root"/Sources/Main/*.swift &
+    pids+=($!)
 done
-wait
+# A bare `wait` always succeeds; wait for each compiler so a failure stops the build.
+for pid in "${pids[@]}"; do wait "$pid"; done
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 lipo -create -output "$app/Contents/MacOS/InlineTranslator" "$build/InlineTranslator-arm64" "$build/InlineTranslator-x86_64"

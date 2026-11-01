@@ -87,6 +87,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             let path = await ShellPath.load()
             environment = EngineEnvironment(shellPath: path)
+            // Settings opened at first launch checked sign-in before the login shell's PATH was known.
+            settingsWindow?.model.refreshSignIn()
         }
         updateTimer = Timer.scheduledTimer(withTimeInterval: UpdateChecker.checkInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.requestUpdateCheck() }
@@ -165,7 +167,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func showSettings() {
-        if let settingsWindow, settingsWindow.window?.isVisible == true {
+        if let settingsWindow {
+            // Also reached while the window is minimized; reuse it rather than opening a second one.
+            settingsWindow.window?.deminiaturize(nil)
             NSApp.activate(ignoringOtherApps: true)
             settingsWindow.window?.makeKeyAndOrderFront(nil)
             requestUpdateCheck()
@@ -293,10 +297,15 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let selection = settings.bubblePosition == "selection" && mode == .selection ? Accessibility.selectionBounds(focused) : nil
             let near = selection ?? CGRect(x: mouse.x + 12, y: mouse.y, width: 1, height: 12)
             let heading = Direction.resolve(source, target: target, home: Languages.home(settings.homeLanguage)) ?? target
+            // Read off the main thread: a slow app can take up to its Accessibility timeout to answer.
+            let context = settings.useContext && mode == .selection
+                ? await Task.detached { Accessibility.selectionContext(focused, selected: source) }.value : nil
+            try Task.checkCancellation()
             if restoreClipboard, let snapshot, Pasteboard.changeCount == ownedClipboard { snapshot.restore() }
             restoreClipboard = false
-            indicator.show(near: near, text: text.t("Translating to {0}… · Esc to cancel", heading.nativeName))
-            let result = try await translator().translate(settings, target: target, text: source)
+            indicator.show(near: near, text: context == nil ? text.t("Translating to {0}… · Esc to cancel", heading.nativeName)
+                : text.t("Translating to {0} with context… · Esc to cancel", heading.nativeName))
+            let result = try await translator().translate(settings, target: target, text: source, context: context)
             try Task.checkCancellation()
             indicator.hide()
             if let primaryError = result.primaryError {
@@ -411,7 +420,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func checkForUpdate(manual: Bool) async {
-        if (!manual && !settings.checkForUpdates) || installing { return }
+        if (!manual && !settings.checkForUpdates) || installing {
+            if manual { settingsWindow?.model.clearUpdateStatus() }
+            return
+        }
         checkingUpdates = true
         refreshTexts()
         settingsWindow?.model.setUpdateStatus(text.t("Checking for updates…"), checking: true)
@@ -464,7 +476,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSApp.terminate(nil)
         } catch {
             ErrorLog.write("Update failed", error)
-            toast.show(text.t("Automatic update failed: {0}", error.localizedDescription), kind: .error)
+            let page = update.url
+            toast.show(text.t("Automatic update failed: {0}", error.localizedDescription), kind: .error, duration: 8) {
+                NSWorkspace.shared.open(page)
+            }
         }
     }
 

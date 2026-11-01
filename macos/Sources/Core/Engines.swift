@@ -43,10 +43,16 @@ private final class SpawnedProcess: @unchecked Sendable {
 
     init(_ executable: String, _ arguments: [String], directory: String, environment: [String: String]) throws {
         name = URL(fileURLWithPath: executable).lastPathComponent
-        var inPipe: [Int32] = [0, 0], outPipe: [Int32] = [0, 0], errPipe: [Int32] = [0, 0]
-        guard pipe(&inPipe) == 0, pipe(&outPipe) == 0, pipe(&errPipe) == 0 else {
-            throw EngineError(message: "Could not create pipes for \(name).")
+        var pipes: [[Int32]] = []
+        for _ in 0..<3 {
+            var ends: [Int32] = [0, 0]
+            guard pipe(&ends) == 0 else {
+                pipes.flatMap { $0 }.forEach { close($0) }
+                throw EngineError(message: "Could not create pipes for \(name).")
+            }
+            pipes.append(ends)
         }
+        let inPipe = pipes[0], outPipe = pipes[1], errPipe = pipes[2]
         var actions: posix_spawn_file_actions_t?
         posix_spawn_file_actions_init(&actions)
         defer { posix_spawn_file_actions_destroy(&actions) }

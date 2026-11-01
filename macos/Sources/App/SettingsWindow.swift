@@ -38,6 +38,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
+    func windowDidResignKey(_ notification: Notification) {
+        // Switching to another app to try a hotkey must not leave recording on, which keeps the hotkeys paused.
+        if window?.firstResponder is RecorderView { window?.makeFirstResponder(nil) }
+    }
+
     func windowDidBecomeKey(_ notification: Notification) {
         // Returning from a Terminal sign-in shows the new account state.
         if !model.signIn.isEmpty { model.refreshSignIn() }
@@ -141,6 +146,8 @@ private struct TranslationTab: View {
                     Text(text.t("Casual")).tag("casual")
                     Text(text.t("Polite")).tag("formal")
                 }
+                Toggle(text.t("Consider the surrounding text"), isOn: $model.draft.useContext)
+                Note(message: text.t("When the app exposes the text around a selection, up to 1,000 characters before and 500 after go to the engine with it, so terms and references are translated in context. Only the selection is translated."))
             } header: { Text(text.t("Languages and tone")) }
 
             Section {

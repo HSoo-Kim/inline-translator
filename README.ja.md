@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest/download/inline-translator-win-x64.zip"><img src="https://img.shields.io/badge/Download-Windows%20x64-000000?style=for-the-badge" alt="Windows x64 版 Inline Translator をダウンロード"></a>
-  <a href="https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.1/inline-translator-mac.dmg"><img src="https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 版 Inline Translator をダウンロード"></a>
+  <a href="https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.2.0/inline-translator-mac.dmg"><img src="https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS 版 Inline Translator をダウンロード"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/releases/latest"><img src="https://img.shields.io/github/v/release/HSoo-Kim/inline-translator?style=for-the-badge&label=Release&color=007ec6" alt="最新リリース"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/releases"><img src="https://img.shields.io/github/downloads/HSoo-Kim/inline-translator/total?style=for-the-badge&label=Downloads&color=1E90FF" alt="GitHub リリースの累計ダウンロード数"></a>
   <a href="https://github.com/HSoo-Kim/inline-translator/stargazers"><img src="https://img.shields.io/github/stars/HSoo-Kim/inline-translator?style=for-the-badge&label=Stars&logo=github&logoColor=white&color=000000" alt="GitHub Stars"></a>
@@ -50,7 +50,7 @@ Windows 11 x64 用です。実行ファイルに .NET が含まれているの�
 ## macOS
 
 1. **翻訳エンジンを用意** —— Windows と同じく、ターミナルで `claude` を実行してサインインするか、`codex login` を実行します。
-2. **[macOS 版をダウンロード](https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.1.1/inline-translator-mac.dmg)** して `inline-translator-mac.dmg` を開き、`Inline Translator` を「アプリケーション」（`Applications`）フォルダーにドラッグします。
+2. **[macOS 版をダウンロード](https://github.com/HSoo-Kim/inline-translator/releases/download/mac-v0.2.0/inline-translator-mac.dmg)** して `inline-translator-mac.dmg` を開き、`Inline Translator` を「アプリケーション」（`Applications`）フォルダーにドラッグします。
 3. Apple による公証を受けていないため、macOS が初回起動をブロックします。**システム設定 → プライバシーとセキュリティ**の下部にある `このまま開く` をクリックしてください。
 4. 設定画面上部のバナーで `システム設定を開く` をクリックし、**アクセシビリティ**で Inline Translator をオンにします。選択したテキストのコピーと訳文の貼り付けに必要な権限です。
 5. 「エンジン」タブで `テスト` し、「翻訳」タブで言語とショートカットを選んで `保存`。
@@ -67,6 +67,7 @@ Windows 11 x64 用です。実行ファイルに .NET が含まれているの�
 
 - Apple Silicon と Intel に対応したユニバーサルアプリです。macOS 13 Ventura 以降で動作します。
 - 入力欄全体を翻訳する既定のアプリに「メッセージ」（iMessage）を追加しました。アプリはバンドル ID で識別し、`+ アプリを追加` にはインストール済み・実行中のアプリが表示されます。
+- **前後の文脈を考慮** —— 翻訳するのはドラッグした部分だけですが、アプリが前後の文章を提供する場合（入力欄、文書エディタ、Web ページなど）、前の最大 1,000 文字と後の最大 500 文字を参考として一緒に送り、語の意味や指示語を文脈に合わせて訳します。たとえば果物の話の後の韓国語「배가 너무 커서 다 못 먹었어」は「お腹がいっぱい」ではなく「梨が大きすぎて」と訳されます。この文脈も選んだエンジンに送られます。設定 → 翻訳 → `前後の文脈を考慮` でオフにできます。
 - Codex CLI のモデルキャッシュにまだなくても、Codex のモデル一覧には常に GPT-6.1-Terra が含まれます。
 - 更新には `mac-v…` タグのリリースを使い、Windows 版がこれを自分の更新とみなすことはありません。各リリースで同じ署名を使うため、更新後もアクセシビリティの権限が保持されます。
 - 訳文を貼り付けるときは、クリップボードの内容をこの Mac 内に留め（ユニバーサルクリップボードは不使用）、クリップボード管理ツールが記録をスキップするよう印を付けます。可能な場合は元のクリップボードを復元します。原文のコピーはクリップボード管理ツールに記録されることがあります。

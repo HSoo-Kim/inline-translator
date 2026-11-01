@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import Security
 
 struct Failure: Error, CustomStringConvertible { let description: String }
 
@@ -91,6 +92,7 @@ let tests: [(String, () async throws -> Void)] = [
         try equal("", value.homeLanguage)
         try equal("Ctrl+Option+R", value.readingHotkey)
         try equal("en", value.readingTargetLanguage)
+        try check(value.useContext, "surrounding text is considered by default")
     }),
     ("normalization repairs presets, engines, tone and apps", {
         let value = settings {
@@ -346,6 +348,52 @@ let tests: [(String, () async throws -> Void)] = [
         }
         _ = try await expectError(CancellationError.self) { _ = try await failsLate.value }
     }),
+    ("surrounding context keeps nearby text and rejects ranges that do not hold the copied text", {
+        let text = "회의 안건입니다.\n지난주 결정: 배포는 금요일.\n그건 다음 주로 미룰게요.\n질문 있으면 알려 주세요."
+        let selected = "그건 다음 주로 미룰게요."
+        let range = (text as NSString).range(of: selected)
+        let context = ContextWindow.around(text: text, selection: range, selected: selected)
+        try equal(TranslationContext(before: "회의 안건입니다.\n지난주 결정: 배포는 금요일.", after: "질문 있으면 알려 주세요."), context)
+        try equal(context, ContextWindow.around(text: text.replacingOccurrences(of: "\n", with: "\r\n"),
+                                                selection: (text.replacingOccurrences(of: "\n", with: "\r\n") as NSString).range(of: selected),
+                                                selected: selected))
+        try check(ContextWindow.around(text: text, selection: NSRange(location: 0, length: 5), selected: selected) == nil, "other text rejected")
+        try check(ContextWindow.around(text: text, selection: NSRange(location: 60, length: 10), selected: selected) == nil, "out of range rejected")
+        try check(ContextWindow.around(text: selected, selection: NSRange(location: 0, length: (selected as NSString).length), selected: selected) == nil,
+                  "nothing around the selection means no context")
+        let long = String(repeating: "word ", count: 600) + "\n" + String(repeating: "앞 문장입니다. ", count: 80)
+        let wide = long + "TARGET" + String(repeating: " 뒤 문장", count: 300)
+        let clipped = ContextWindow.around(text: wide, selection: (wide as NSString).range(of: "TARGET"), selected: "TARGET")!
+        try check((clipped.before as NSString).length <= ContextWindow.maxBefore && (clipped.after as NSString).length <= ContextWindow.maxAfter, "bounded")
+        try check(clipped.before.hasPrefix("word") || clipped.before.hasPrefix("앞"), "cut at a word boundary: \(clipped.before.prefix(12))")
+        try check(clipped.after.hasSuffix("뒤 문장"), "after cut at a word boundary")
+        try check(ContextWindow.clip(before: " \n ", after: "") == nil, "whitespace is no context")
+    }),
+    ("surrounding context reaches the engine for reference only", {
+        let context = TranslationContext(before: "Release is on Friday.", after: "Ask me if unsure.")
+        let message = Translator.wrap("그건 다음 주로 미룰게요.", output: en, context: context)
+        try equal("Translate this message into English. Translate only the message; the context is for reference.\n"
+                  + "BEGIN CONTEXT BEFORE\nRelease is on Friday.\nEND CONTEXT BEFORE\nBEGIN MESSAGE\n그건 다음 주로 미룰게요.\nEND MESSAGE\n"
+                  + "BEGIN CONTEXT AFTER\nAsk me if unsure.\nEND CONTEXT AFTER", message)
+        try check(!Translator.wrap("x", output: en, context: TranslationContext(before: "", after: "later")).contains("CONTEXT BEFORE"),
+                  "empty side omitted")
+        try equal("Let's postpone it", Translator.unwrap("BEGIN MESSAGE\nLet's postpone it\nEND MESSAGE\nBEGIN CONTEXT AFTER\nEND CONTEXT AFTER"))
+        let prompt = Prompt.instructions(en, tone: "natural", home: ko, context: true)
+        try check(prompt.contains("Never translate, repeat or output the context."), "context rule")
+        try check(prompt.rangeOfCharacter(from: CharacterSet(charactersIn: "\"&|<>^%\n`$")) == nil, "context prompt stays shell-safe")
+        try check(!Prompt.instructions(en, tone: "natural").contains("CONTEXT"), "no context rule without context")
+        let seen = Calls()
+        let result = try await Translator { _, instructions, text in
+            seen.add(instructions)
+            seen.add(text)
+            return "Let's push it to next week."
+        }.translate(settings { $0.homeLanguage = "ko" }, target: en, text: "그건 다음 주로 미룰게요.", context: context)
+        try equal("Let's push it to next week.", result.text)
+        try check(seen.all[0].contains("CONTEXT") && seen.all[1].contains("BEGIN CONTEXT BEFORE\nRelease is on Friday."), "context sent")
+        let url = testDirectory.appendingPathComponent("context.json")
+        try SettingsStore.save(url, AppSettings().with(\.useContext, false))
+        try check(SettingsStore.load(url)?.useContext == false, "turning context off persists")
+    }),
     ("CLI arguments keep sessions unsaved and tools disabled", {
         let claude = EngineCli.claudeArguments(model: "haiku", instructions: "Translate.")
         try check(claude.contains("--no-session-persistence") && claude.contains("--safe-mode") && claude.contains("--strict-mcp-config"), "claude isolation flags")
@@ -585,16 +633,39 @@ let tests: [(String, () async throws -> Void)] = [
             ReleaseInfo(version: AppVersion(9, 9, 9), tag: "mac-v9.9.9", url: URL(string: "https://github.com/a")!,
                         packageURL: URL(string: "https://github.com/p.dmg"), packageSHA256: sha)
         }
+        func requirement(_ text: String) throws -> SecRequirement {
+            var requirement: SecRequirement?
+            guard SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess, let requirement else {
+                throw Failure(description: "bad requirement \(text)")
+            }
+            return requirement
+        }
+        let sameIdentity = try requirement(#"identifier "io.example.test""#)
         let wrong = try await expectError(UpdateFailure.self) {
-            try await UpdateInstaller.install(release(String(repeating: "0", count: 64)), into: installed, bundleID: "io.example.test", download: copy(good))
+            try await UpdateInstaller.install(release(String(repeating: "0", count: 64)), into: installed, bundleID: "io.example.test",
+                                              requirement: sameIdentity, download: copy(good))
         }
         try check(wrong.message.contains("SHA-256"), "checksum failure reported")
         try check(try String(contentsOf: executable, encoding: .utf8).contains("old"), "app unchanged after checksum failure")
         _ = try await expectError(UpdateFailure.self) {
-            try await UpdateInstaller.install(release(try UpdateInstaller.sha256(of: foreign)), into: installed, bundleID: "io.example.test", download: copy(foreign))
+            try await UpdateInstaller.install(release(try UpdateInstaller.sha256(of: foreign)), into: installed, bundleID: "io.example.test",
+                                              requirement: sameIdentity, download: copy(foreign))
         }
         try check(try String(contentsOf: executable, encoding: .utf8).contains("old"), "another app is never installed")
-        try await UpdateInstaller.install(release(try UpdateInstaller.sha256(of: good)), into: installed, bundleID: "io.example.test", download: copy(good))
+        let unsigned = try await expectError(UpdateFailure.self) {
+            try await UpdateInstaller.install(release(try UpdateInstaller.sha256(of: good)), into: installed, bundleID: "io.example.test",
+                                              requirement: try requirement(#"identifier "io.example.test" and anchor apple generic"#),
+                                              download: copy(good))
+        }
+        try check(unsigned.message.contains("not signed like this one"), "a different signing identity is refused")
+        _ = try await expectError(UpdateFailure.self) {
+            // Ad hoc signatures pin the exact build, so an ad hoc copy never replaces itself with different code.
+            try await UpdateInstaller.install(release(try UpdateInstaller.sha256(of: good)), into: installed, bundleID: "io.example.test",
+                                              download: copy(good))
+        }
+        try check(try String(contentsOf: executable, encoding: .utf8).contains("old"), "app unchanged after signature failures")
+        try await UpdateInstaller.install(release(try UpdateInstaller.sha256(of: good)), into: installed, bundleID: "io.example.test",
+                                          requirement: sameIdentity, download: copy(good))
         try check(try String(contentsOf: executable, encoding: .utf8).contains("new"), "app replaced")
         let leftovers = try manager.contentsOfDirectory(atPath: installed.deletingLastPathComponent().path)
         try equal([UpdateInstaller.appName], leftovers)

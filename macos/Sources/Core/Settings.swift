@@ -86,6 +86,8 @@ struct AppSettings: Codable, Equatable, Sendable {
     var bubblePosition = "mouse"
     var checkForUpdates = true
     var autoInstallUpdates = true
+    /// Sends the text around a selection with it, when the app exposes that text, so the translation fits.
+    var useContext = true
 
     init() {}
 
@@ -110,6 +112,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         bubblePosition = read(.bubblePosition, defaults.bubblePosition)
         checkForUpdates = read(.checkForUpdates, defaults.checkForUpdates)
         autoInstallUpdates = read(.autoInstallUpdates, defaults.autoInstallUpdates)
+        useContext = read(.useContext, defaults.useContext)
     }
 
     static func defaultModel(_ provider: Provider) -> String {

@@ -14,8 +14,8 @@ struct EngineTest: Equatable {
 final class SettingsModel: ObservableObject {
     let text: UiText
     private weak var app: AppController?
-    let original: AppSettings
-    let originalLoginItem: Bool
+    private(set) var original: AppSettings
+    private(set) var originalLoginItem: Bool
     @Published var draft: AppSettings { didSet { if draft.presets != oldValue.presets || draft.readingHotkey != oldValue.readingHotkey || draft.readingHotkeyEnabled != oldValue.readingHotkeyEnabled { pruneRegistrationErrors(oldValue) } } }
     @Published var openAtLogin: Bool
     @Published var tab = "translation"
@@ -28,6 +28,7 @@ final class SettingsModel: ObservableObject {
     @Published var checkingUpdates = false
     @Published var accessibilityTrusted = Accessibility.isTrusted
     private var signInTask: Task<Void, Never>?
+    private var refreshQueued = false
     var close: () -> Void = {}
 
     init(app: AppController) {
@@ -71,6 +72,9 @@ final class SettingsModel: ObservableObject {
             if LoginItem.isAvailable && openAtLogin != LoginItem.isEnabled { try LoginItem.set(openAtLogin) }
             let failed = try app.saveSettings(draft)
             guard failed.isEmpty else {
+                // The settings were saved and the other hotkeys applied; compare later edits against what is on disk.
+                original = app.settings
+                originalLoginItem = LoginItem.isEnabled
                 let hotkeys = draft.presets.map { ($0.enabled, $0.hotkey) } + [(draft.readingHotkeyEnabled, draft.readingHotkey)]
                 for (index, entry) in hotkeys.enumerated() where entry.0 && failed.contains(where: { $0.caseInsensitiveCompare(entry.1) == .orderedSame }) {
                     registrationErrors[index] = text.t("This hotkey is already used by another app. Choose another.")
@@ -120,8 +124,13 @@ final class SettingsModel: ObservableObject {
         }
     }
 
+    /// A request while a check runs is queued, so the newest environment (login-shell PATH) always gets checked.
     func refreshSignIn() {
-        guard signInTask == nil, let app else { return }
+        guard let app else { return }
+        guard signInTask == nil else {
+            refreshQueued = true
+            return
+        }
         signIn = [:]
         let environment = app.environment
         signInTask = Task {
@@ -130,6 +139,10 @@ final class SettingsModel: ObservableObject {
             let (claudeState, codexState) = await (claude, codex)
             signIn = [.claude: claudeState, .codex: codexState]
             signInTask = nil
+            if refreshQueued {
+                refreshQueued = false
+                refreshSignIn()
+            }
         }
     }
 
@@ -153,6 +166,11 @@ final class SettingsModel: ObservableObject {
     func setUpdateStatus(_ message: String, checking: Bool = false, error: Bool = false) {
         checkingUpdates = checking
         updateStatus = (message, error)
+    }
+
+    func clearUpdateStatus() {
+        checkingUpdates = false
+        updateStatus = nil
     }
 
     func checkUpdates() {

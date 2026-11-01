@@ -26,18 +26,32 @@ enum Accessibility {
         return AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success ? value : nil
     }
 
+    static func element(_ value: AnyObject?) -> AXUIElement? {
+        guard let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return (value as! AXUIElement)
+    }
+
     static func focusedElement(_ pid: pid_t) -> AXUIElement? {
-        attribute(application(pid), kAXFocusedUIElementAttribute).map { $0 as! AXUIElement }
+        let focused = element(attribute(application(pid), kAXFocusedUIElementAttribute))
+        if let focused { AXUIElementSetMessagingTimeout(focused, 0.5) }
+        return focused
     }
 
     static func focusedWindow(_ pid: pid_t) -> AXUIElement? {
-        attribute(application(pid), kAXFocusedWindowAttribute).map { $0 as! AXUIElement }
+        element(attribute(application(pid), kAXFocusedWindowAttribute))
     }
 
-    /// Read-only only when the app says so; anything unknown counts as editable, so pasting stays the default.
+    /// Read-only only when the app says so: static text or a web page whose selection cannot be edited.
+    /// Anything unknown counts as editable, so pasting stays the default (Mail compose is an editable web area).
     static func isReadOnly(_ element: AXUIElement?) -> Bool {
-        guard let element, let role = attribute(element, kAXRoleAttribute) as? String else { return false }
-        return role == kAXStaticTextRole || role == "AXWebArea"
+        guard let element, let role = attribute(element, kAXRoleAttribute) as? String,
+              role == kAXStaticTextRole || role == "AXWebArea" else { return false }
+        return !settable(element, kAXSelectedTextAttribute) && !settable(element, kAXValueAttribute)
+    }
+
+    private static func settable(_ element: AXUIElement, _ name: String) -> Bool {
+        var result = DarwinBoolean(false)
+        return AXUIElementIsAttributeSettable(element, name as CFString, &result) == .success && result.boolValue
     }
 
     /// Screen rectangle of the selected text (top-left origin), when the app exposes it.
@@ -45,10 +59,81 @@ enum Accessibility {
         guard let element, let range = attribute(element, kAXSelectedTextRangeAttribute) else { return nil }
         var bounds: AnyObject?
         guard AXUIElementCopyParameterizedAttributeValue(element, kAXBoundsForRangeParameterizedAttribute as CFString,
-                                                         range, &bounds) == .success, let bounds else { return nil }
+                                                         range, &bounds) == .success,
+              let bounds, CFGetTypeID(bounds) == AXValueGetTypeID() else { return nil }
         var rect = CGRect.zero
         guard AXValueGetValue(bounds as! AXValue, .cgRect, &rect), rect.width > 0, rect.height > 0 else { return nil }
         return rect
+    }
+
+    static func parameter(_ element: AXUIElement, _ name: String, _ argument: AnyObject) -> AnyObject? {
+        var value: AnyObject?
+        return AXUIElementCopyParameterizedAttributeValue(element, name as CFString, argument, &value) == .success ? value : nil
+    }
+
+    static func selectedRange(_ element: AXUIElement) -> NSRange? {
+        guard let value = attribute(element, kAXSelectedTextRangeAttribute), CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
+        var range = CFRange()
+        guard AXValueGetValue(value as! AXValue, .cfRange, &range), range.location >= 0, range.length > 0 else { return nil }
+        return NSRange(location: range.location, length: range.length)
+    }
+
+    private static func string(_ element: AXUIElement, _ range: NSRange) -> String? {
+        var span = CFRange(location: range.location, length: range.length)
+        guard let argument = AXValueCreate(.cfRange, &span) else { return nil }
+        return parameter(element, kAXStringForRangeParameterizedAttribute, argument) as? String
+    }
+
+    /// The text around the selection, read without touching the selection or the pasteboard.
+    /// Text fields and editors report character ranges; web pages (Safari, Chrome, Mail) report text markers.
+    /// nil when the app exposes neither or reports text that does not contain what was copied.
+    static func selectionContext(_ element: AXUIElement?, selected: String) -> TranslationContext? {
+        guard let element else { return nil }
+        // Each source must contain the copied text; otherwise try the next one (web areas also report ranges).
+        if let selection = selectedRange(element) {
+            if let total = attribute(element, kAXNumberOfCharactersAttribute) as? Int, NSMaxRange(selection) <= total {
+                let start = max(0, selection.location - ContextWindow.maxBefore - 1)
+                let end = min(total, NSMaxRange(selection) + ContextWindow.maxAfter + 1)
+                if let chunk = string(element, NSRange(location: start, length: end - start)),
+                   let context = ContextWindow.around(text: chunk, selection: NSRange(location: selection.location - start,
+                                                                                      length: selection.length), selected: selected) {
+                    return context
+                }
+            }
+            if let value = attribute(element, kAXValueAttribute) as? String, (value as NSString).length <= 500_000,
+               let context = ContextWindow.around(text: value, selection: selection, selected: selected) {
+                return context
+            }
+        }
+        return webContext(element, selected: selected)
+    }
+
+    private static func webContext(_ element: AXUIElement, selected: String) -> TranslationContext? {
+        guard let range = attribute(element, "AXSelectedTextMarkerRange"), CFGetTypeID(range) == AXTextMarkerRangeGetTypeID(),
+              let current = parameter(element, "AXStringForTextMarkerRange", range) as? String,
+              ContextWindow.same(current, selected) else { return nil }
+        let start: AnyObject = AXTextMarkerRangeCopyStartMarker(range as! AXTextMarkerRange)
+        let end: AnyObject = AXTextMarkerRangeCopyEndMarker(range as! AXTextMarkerRange)
+        func text(from first: AnyObject, to second: AnyObject) -> String {
+            guard let range = parameter(element, "AXTextMarkerRangeForUnorderedTextMarkers", [first, second] as CFArray) else { return "" }
+            return parameter(element, "AXStringForTextMarkerRange", range) as? String ?? ""
+        }
+        // Widens one paragraph at a time. Past the first or last paragraph WebKit returns an empty marker, whose range
+        // has no text, so stop at the last step that still added text.
+        func widen(from anchor: AnyObject, _ name: String, steps: Int, before: Bool) -> String {
+            var marker = anchor, best = ""
+            for _ in 0..<steps {
+                guard let next = parameter(element, name, marker) else { break }
+                let candidate = before ? text(from: next, to: anchor) : text(from: anchor, to: next)
+                if candidate.isEmpty || candidate == best { break }
+                best = candidate
+                marker = next
+            }
+            return best
+        }
+        // The current paragraph plus two before it, and the current paragraph plus one after it; clip() bounds the size.
+        return ContextWindow.clip(before: widen(from: start, "AXPreviousParagraphStartTextMarkerForTextMarker", steps: 3, before: true),
+                                  after: widen(from: end, "AXNextParagraphEndTextMarkerForTextMarker", steps: 2, before: false))
     }
 }
 
@@ -81,7 +166,8 @@ enum Keyboard {
         let source = CGEventSource(stateID: .hidSystemState)
         for down in [true, false] {
             guard let event = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(key), keyDown: down) else { continue }
-            event.flags = flags
+            // Some apps check the device-dependent left-Command bit as well as the generic Command flag.
+            event.flags = flags.contains(.maskCommand) ? flags.union(CGEventFlags(rawValue: 0x8)) : flags
             event.setIntegerValueField(.eventSourceUserData, value: Capture.syntheticInputTag)
             event.post(tap: .cghidEventTap)
         }
@@ -147,5 +233,31 @@ enum Pasteboard {
 }
 
 enum KeyCode {
-    static let a = kVK_ANSI_A, c = kVK_ANSI_C, v = kVK_ANSI_V, escape = kVK_Escape
+    static let escape = kVK_Escape
+    static var a: Int { command("a", fallback: kVK_ANSI_A) }
+    static var c: Int { command("c", fallback: kVK_ANSI_C) }
+    static var v: Int { command("v", fallback: kVK_ANSI_V) }
+
+    /// The key that types `character` while Command is held in the current keyboard layout. Key codes name physical
+    /// positions, so the US position of A would send Cmd+Q on AZERTY and Cmd+C would become Cmd+J on Dvorak.
+    /// With Command held, layouts such as "Dvorak – QWERTY ⌘" report their QWERTY shortcut keys.
+    static func command(_ character: Character, fallback: Int,
+                        layout source: TISInputSource? = TISCopyCurrentASCIICapableKeyboardLayoutInputSource()?.takeRetainedValue()) -> Int {
+        guard let source, let pointer = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData),
+              let bytes = CFDataGetBytePtr(Unmanaged<CFData>.fromOpaque(pointer).takeUnretainedValue()) else { return fallback }
+        return bytes.withMemoryRebound(to: UCKeyboardLayout.self, capacity: 1) { layout in
+            for code in [fallback] + Array(0..<128) {
+                var deadKeys: UInt32 = 0
+                var length = 0
+                var characters = [UniChar](repeating: 0, count: 4)
+                let status = UCKeyTranslate(layout, UInt16(code), UInt16(kUCKeyActionDown), UInt32((cmdKey >> 8) & 0xFF),
+                                            UInt32(LMGetKbdType()), OptionBits(1 << kUCKeyTranslateNoDeadKeysBit),
+                                            &deadKeys, characters.count, &length, &characters)
+                if status == noErr, length == 1, String(utf16CodeUnits: characters, count: 1).lowercased() == String(character) {
+                    return code
+                }
+            }
+            return fallback
+        }
+    }
 }
