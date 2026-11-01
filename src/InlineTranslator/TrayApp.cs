@@ -36,6 +36,7 @@ internal sealed class TrayApp : ApplicationContext
     internal SettingsForm? SettingsWindow => settingsForm;
     private Action? balloonAction;
     private readonly HashSet<Provider> signInReminded = [];
+    private readonly HashSet<Provider> authenticationFailures = [];
 
     public TrayApp(string settingsPath, AppSettings settings, bool firstRun, uint activationMessage,
         Func<CancellationToken, Task<ReleaseInfo?>>? fetchUpdate = null, EngineRun? runEngine = null)
@@ -144,7 +145,7 @@ internal sealed class TrayApp : ApplicationContext
             return;
         }
         settingsForm = new SettingsForm(settings, text, icon, update, SaveSettings, InstallUpdateAsync, ChangeDisplayLanguage,
-            checkUpdates: () => RequestUpdateCheck(manual: true));
+            checkUpdates: () => RequestUpdateCheck(manual: true), authenticationFailures: authenticationFailures);
         settingsForm.HotkeyRecordingChanged += recording =>
         {
             recordingHotkey = recording;
@@ -193,6 +194,7 @@ internal sealed class TrayApp : ApplicationContext
         bool restoreClipboard = false;
         uint ownedClipboard = 0;
         TranslationGuard? guard = null;
+        var runSettings = settings;
         try
         {
             nint window = Native.GetForegroundWindow();
@@ -252,15 +254,21 @@ internal sealed class TrayApp : ApplicationContext
             if (restoreClipboard && Native.GetClipboardSequenceNumber() == ownedClipboard) RestoreClipboard(snapshot);
             restoreClipboard = false;
             indicator.ShowNear(new Point(near.Left, near.Bottom), text.T("Translating to {0}… · Esc to cancel", heading.NativeName));
-            var result = await translator.TranslateAsync(settings, target, copied, token);
+            runSettings = settings;
+            var result = await translator.TranslateAsync(runSettings, target, copied, token);
             token.ThrowIfCancellationRequested();
             indicator.Hide();
+            NoteEngineAuthentication(result.Engine.Provider, succeeded: true);
             if (result.PrimaryError is { } primaryError)
             {
-                ErrorLog.Write($"{settings.Primary.DisplayName} failed, used {result.Engine.DisplayName}", primaryError);
-                if (EngineCli.IsSignInError(primaryError) && signInReminded.Add(settings.Primary.Provider))
-                    NotifySignIn(settings.Primary.Provider, text.T("{0} needs you to sign in again, so {1} translated this. Click here to sign in to {0}.",
-                        EngineCli.ProductName(settings.Primary.Provider), EngineCli.ProductName(result.Engine.Provider)));
+                ErrorLog.Write($"{runSettings.Primary.DisplayName} failed, used {result.Engine.DisplayName}", primaryError);
+                if (EngineCli.IsSignInError(primaryError))
+                {
+                    NoteEngineAuthentication(runSettings.Primary.Provider, succeeded: false);
+                    if (signInReminded.Add(runSettings.Primary.Provider))
+                        NotifySignIn(runSettings.Primary.Provider, text.T("{0} needs you to sign in again, so {1} translated this. Click here to sign in to {0}.",
+                            EngineCli.ProductName(runSettings.Primary.Provider), EngineCli.ProductName(result.Engine.Provider)));
+                }
             }
 
             void ShowBubble(bool changed = false) => bubble.ShowAt(near, $"→ {(result.Output ?? target).NativeName} · {result.Engine.DisplayName}", result.Text,
@@ -317,10 +325,13 @@ internal sealed class TrayApp : ApplicationContext
         }
         catch (TranslationFailedException failure)
         {
-            ErrorLog.Write(settings.Primary.DisplayName + " failed", failure.Primary);
-            if (failure.Fallback is { } fallback) ErrorLog.Write(settings.Fallback.DisplayName + " failed", fallback);
-            var provider = EngineCli.IsSignInError(failure.Primary) ? settings.Primary.Provider
-                : failure.Fallback is { } other && EngineCli.IsSignInError(other) ? settings.Fallback.Provider
+            ErrorLog.Write(runSettings.Primary.DisplayName + " failed", failure.Primary);
+            if (failure.Fallback is { } fallback) ErrorLog.Write(runSettings.Fallback.DisplayName + " failed", fallback);
+            if (EngineCli.IsSignInError(failure.Primary)) NoteEngineAuthentication(runSettings.Primary.Provider, succeeded: false);
+            if (failure.Fallback is { } fallbackError && EngineCli.IsSignInError(fallbackError))
+                NoteEngineAuthentication(runSettings.Fallback.Provider, succeeded: false);
+            var provider = EngineCli.IsSignInError(failure.Primary) ? runSettings.Primary.Provider
+                : failure.Fallback is { } other && EngineCli.IsSignInError(other) ? runSettings.Fallback.Provider
                 : Provider.None;
             if (provider != Provider.None)
                 NotifySignIn(provider, text.T("{0} needs you to sign in. Click here to sign in.", EngineCli.ProductName(provider)));
@@ -466,6 +477,18 @@ internal sealed class TrayApp : ApplicationContext
     {
         balloonAction = null;
         tray.ShowBalloonTip(5000, "Inline Translator", message, kind);
+    }
+
+    private void NoteEngineAuthentication(Provider provider, bool succeeded)
+    {
+        if (provider == Provider.None) return;
+        if (succeeded)
+        {
+            authenticationFailures.Remove(provider);
+            signInReminded.Remove(provider);
+        }
+        else authenticationFailures.Add(provider);
+        if (settingsForm is { IsDisposed: false } form) form.AuthenticationChanged(provider, succeeded);
     }
 
     private void NotifySignIn(Provider provider, string message)

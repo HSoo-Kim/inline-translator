@@ -10,6 +10,8 @@ internal sealed class SettingsForm : Form
     private readonly bool originalStartup;
     private readonly Func<AppSettings, IReadOnlyList<string>> save;
     private readonly EngineRun testRun;
+    private readonly HashSet<Provider> authenticationFailures;
+    private readonly Func<Provider, CancellationToken, Task<SignIn>> checkSignIn;
     private readonly EngineRow primary, fallback;
     private readonly List<(ToggleSwitch Enabled, HotkeyBox Hotkey, PillDropdown Language)> presets = [];
     private readonly List<Label> hotkeyErrors = [];
@@ -61,13 +63,16 @@ internal sealed class SettingsForm : Form
 
     public SettingsForm(AppSettings settings, UiText text, Icon icon, ReleaseInfo? update,
         Func<AppSettings, IReadOnlyList<string>> save, Func<Task> installUpdate, Action<string> changeLanguage,
-        EngineRun? testRun = null, Func<Task>? checkUpdates = null)
+        EngineRun? testRun = null, Func<Task>? checkUpdates = null,
+        HashSet<Provider>? authenticationFailures = null, Func<Provider, CancellationToken, Task<SignIn>>? checkSignIn = null)
     {
         this.text = text;
         original = settings;
         originalStartup = StartWithWindows.IsEnabled;
         this.save = save;
         this.testRun = testRun ?? EngineCli.TranslateAsync;
+        this.authenticationFailures = authenticationFailures ?? [];
+        this.checkSignIn = checkSignIn ?? EngineCli.CheckSignInAsync;
         Text = "Inline Translator - " + text.T("Settings");
         Icon = icon;
         Font = Ui.Regular();
@@ -87,10 +92,16 @@ internal sealed class SettingsForm : Form
         readingHotkeyEnabled = Toggle(text.T("Read-only translation hotkey"), "reading-enabled");
         readingHotkey = new HotkeyBox(text) { Name = "reading-hotkey", AccessibleName = text.T("Read-only translation hotkey") };
         WireHotkeyRecording(readingHotkey);
-        primary = new EngineRow("primary", text.T("Primary"), false, text, this);
-        fallback = new EngineRow("fallback", text.T("If it fails"), true, text, this);
+        var modelChoices = Providers.SelectMany(provider => EngineCli.SuggestedModels(provider)
+            .Select(option => (Choice: new EngineChoice(provider, option.Id), Label: option.Label))).ToList();
+        foreach (var choice in new[] { settings.Primary, settings.Fallback })
+            if (choice.Provider != Provider.None && !string.IsNullOrWhiteSpace(choice.Model) && modelChoices.All(option => option.Choice != choice))
+                modelChoices.Add((choice, choice.Model));
+        primary = new EngineRow("primary", text.T("Primary"), false, text, this, modelChoices);
+        fallback = new EngineRow("fallback", text.T("If it fails"), true, text, this, modelChoices);
         foreach (var engine in new[] { primary, fallback })
         {
+            engine.CustomModelAdded += () => { primary.RefreshModelChoices(); fallback.RefreshModelChoices(); };
             engine.Test.Click += (_, _) =>
             {
                 LastTest = TestAsync(engine);
@@ -98,7 +109,7 @@ internal sealed class SettingsForm : Form
             };
             engine.Changed += () =>
             {
-                engine.ShowStatus(signIn);
+                engine.ShowStatus(EffectiveSignIn);
                 RefreshDraftState();
             };
         }
@@ -170,14 +181,16 @@ internal sealed class SettingsForm : Form
         translation.Controls.Add(readingCard);
 
         var engines = AddTab("engines", text.T("Engines"));
+        engines.Controls.Add(Note(text.T("Choosing a model also selects its engine.")));
         engines.Controls.Add(primary.Panel);
         engines.Controls.Add(fallback.Panel);
         var accountCard = Card(text.T("Accounts"),
             text.T("Uses the Claude Code or Codex you are already signed in to on this PC. No API key needed."));
+        accountCard.Controls.Add(Note(text.T("After signing in, use Test to confirm the engine.")));
         foreach (var provider in Providers)
         {
-            var pill = new StatusPill();
-            var action = new PillButton("", PillKind.Soft) { Visible = false, Margin = new Padding(0, 4, 0, 8) };
+            var pill = new StatusPill { Name = $"account-{provider}-status" };
+            var action = new PillButton("", PillKind.Soft) { Name = $"account-{provider}-action", Margin = new Padding(0, 4, 0, 8) };
             action.Click += (_, _) => AccountAction(provider);
             accountCard.Controls.Add(pill);
             accountCard.Controls.Add(action);
@@ -610,6 +623,8 @@ internal sealed class SettingsForm : Form
         {
             var result = await new Translator(testRun).TranslateAsync(settings, target, sample, CancellationToken.None);
             if (IsDisposed) return;
+            authenticationFailures.Remove(engine.Provider);
+            AuthenticationChanged(engine.Provider, succeeded: true);
             row.Result.ForeColor = Ui.GreenInk;
             row.Result.Text = text.T("Test succeeded · {0} · {1:0.0}s\n{2}", engine.DisplayName, clock.Elapsed.TotalSeconds, result.Text);
         }
@@ -618,7 +633,12 @@ internal sealed class SettingsForm : Form
             if (IsDisposed) return;
             row.Result.ForeColor = Ui.Red;
             row.Result.Text = text.T("Test failed · {0}", failure.Message);
-            if (EngineCli.IsSignInError(failure.Primary)) await RefreshSignInAsync();
+            if (EngineCli.IsSignInError(failure.Primary))
+            {
+                authenticationFailures.Add(engine.Provider);
+                AuthenticationChanged(engine.Provider, succeeded: false);
+                await RefreshSignInAsync();
+            }
         }
         finally
         {
@@ -636,10 +656,19 @@ internal sealed class SettingsForm : Form
     {
         foreach (var provider in Providers) signIn[provider] = null;
         ShowAccounts();
-        var claude = EngineCli.CheckSignInAsync(Provider.Claude, CancellationToken.None);
-        var codex = EngineCli.CheckSignInAsync(Provider.Codex, CancellationToken.None);
+        var claude = checkSignIn(Provider.Claude, CancellationToken.None);
+        var codex = checkSignIn(Provider.Codex, CancellationToken.None);
         signIn[Provider.Claude] = await claude;
         signIn[Provider.Codex] = await codex;
+        if (!IsDisposed) ShowAccounts();
+    }
+
+    private SignIn? EffectiveSignIn(Provider provider) =>
+        authenticationFailures.Contains(provider) && signIn[provider] != SignIn.NotInstalled ? SignIn.SignedOut : signIn[provider];
+
+    internal void AuthenticationChanged(Provider provider, bool succeeded)
+    {
+        if (succeeded) signIn[provider] = SignIn.SignedIn;
         if (!IsDisposed) ShowAccounts();
     }
 
@@ -647,7 +676,7 @@ internal sealed class SettingsForm : Form
     {
         foreach (var (provider, row) in accounts)
         {
-            var state = signIn[provider];
+            var state = EffectiveSignIn(provider);
             string name = EngineCli.ProductName(provider);
             switch (state)
             {
@@ -667,11 +696,13 @@ internal sealed class SettingsForm : Form
                     row.Pill.Show($"{name} · {text.T("Checking…")}", Ui.Gray, Ui.Soft, Ui.Muted);
                     break;
             }
-            row.Action.Visible = state is SignIn.SignedOut or SignIn.NotInstalled or SignIn.Unknown;
-            row.Action.Text = state == SignIn.NotInstalled ? text.T("How to install") : text.T("Sign in");
+            row.Action.Visible = true;
+            row.Action.Enabled = state is not null;
+            row.Action.Text = text.T(state == SignIn.NotInstalled ? "How to install" : state == SignIn.SignedIn ? "Sign in again" : "Sign in");
+            row.Action.AccessibleName = name + " · " + row.Action.Text;
         }
-        primary.ShowStatus(signIn);
-        fallback.ShowStatus(signIn);
+        primary.ShowStatus(EffectiveSignIn);
+        fallback.ShowStatus(EffectiveSignIn);
         ReflowPages();
     }
 
@@ -681,12 +712,12 @@ internal sealed class SettingsForm : Form
         {
             if (signIn[provider] == SignIn.NotInstalled) { Open(EngineCli.InstallPage(provider)); return; }
             var window = EngineCli.StartSignIn(provider);
-            window.EnableRaisingEvents = true;
             window.Exited += (_, _) =>
             {
                 window.Dispose();
                 if (!IsDisposed) BeginInvoke(async () => await RefreshSignInAsync());
             };
+            window.EnableRaisingEvents = true;
         }
         catch (Exception error) when (error is EngineException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
@@ -698,15 +729,20 @@ internal sealed class SettingsForm : Form
     private sealed class EngineRow
     {
         private readonly PillDropdown provider, model;
+        private readonly List<(EngineChoice Choice, string Label)> modelChoices;
+        private bool syncingProvider;
         private readonly Label status;
         public FluidStack Panel { get; }
         public PillButton Test { get; }
         public Label Result { get; }
         public bool Running { get; set; }
         public event Action? Changed;
+        public event Action? CustomModelAdded;
 
-        public EngineRow(string id, string title, bool allowNone, UiText text, IWin32Window owner)
+        public EngineRow(string id, string title, bool allowNone, UiText text, IWin32Window owner,
+            List<(EngineChoice Choice, string Label)> modelChoices)
         {
+            this.modelChoices = modelChoices;
             provider = Dropdown(id + "-provider");
             model = Dropdown(id + "-model");
             Panel = Card(title);
@@ -726,8 +762,28 @@ internal sealed class SettingsForm : Form
             providers.Add((Provider.Claude, "Claude Code"));
             providers.Add((Provider.Codex, "Codex"));
             provider.SetOptions(providers);
-            provider.SelectionChanged += () => FillModels(AppSettings.DefaultModel(SelectedProvider));
-            model.SelectionChanged += () => Changed?.Invoke();
+            provider.SelectionChanged += () => { if (!syncingProvider) FillModels(AppSettings.DefaultModel(SelectedProvider)); };
+            model.SelectionChanged += () =>
+            {
+                if (model.SelectedValue is string custom)
+                {
+                    var customChoice = new EngineChoice(SelectedProvider, custom);
+                    if (modelChoices.All(option => option.Choice != customChoice))
+                    {
+                        modelChoices.Add((customChoice, custom));
+                        CustomModelAdded?.Invoke();
+                    }
+                    else FillModels(custom);
+                    return;
+                }
+                if (!syncingProvider && model.SelectedValue is EngineChoice choice && choice.Provider != SelectedProvider)
+                {
+                    syncingProvider = true;
+                    try { provider.Select(choice.Provider); }
+                    finally { syncingProvider = false; }
+                }
+                Changed?.Invoke();
+            };
             model.AllowCustom(text.T("Enter a model name…"), () => InputDialog.Ask(owner, text.T("Model"),
                 text.T("Type the exact model name, for example claude-opus-5-5."), text.T("OK"), text.T("Cancel")));
             this.text = text;
@@ -741,12 +797,19 @@ internal sealed class SettingsForm : Form
             provider.Select(engine.Provider);
             FillModels(engine.Model);
         }
+        public void RefreshModelChoices() => FillModels(Get().Model);
 
-        public EngineChoice Get() => new(SelectedProvider, SelectedProvider == Provider.None ? "" : model.SelectedValue as string ?? "");
 
-        public void ShowStatus(IReadOnlyDictionary<Provider, SignIn?> states)
+        public EngineChoice Get() => new(SelectedProvider, SelectedProvider == Provider.None ? "" : model.SelectedValue switch
         {
-            var state = SelectedProvider == Provider.None ? null : states[SelectedProvider];
+            EngineChoice choice => choice.Model,
+            string custom => custom,
+            _ => "",
+        });
+
+        public void ShowStatus(Func<Provider, SignIn?> stateFor)
+        {
+            var state = SelectedProvider == Provider.None ? null : stateFor(SelectedProvider);
             status.Text = text.T(SelectedProvider == Provider.None ? "None" : state switch
             {
                 SignIn.SignedIn => "Signed in", SignIn.SignedOut => "Sign-in needed",
@@ -760,9 +823,9 @@ internal sealed class SettingsForm : Form
             var choice = SelectedProvider;
             model.Enabled = choice != Provider.None;
             Test.Enabled = choice != Provider.None && !Running;
-            model.SetOptions(EngineCli.SuggestedModels(choice).Select(option =>
-                ((object)option.Id, option.Label)));
-            if (choice != Provider.None) model.Select(selected);
+            model.SetOptions(modelChoices.Select(option => ((object)option.Choice, option.Label)));
+            if (choice != Provider.None)
+                model.Select((object?)modelChoices.FirstOrDefault(option => option.Choice.Provider == choice && option.Choice.Model == selected).Choice ?? selected);
             else model.SelectIndex(-1);
             Changed?.Invoke();
         }

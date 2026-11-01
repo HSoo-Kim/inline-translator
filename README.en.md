@@ -43,6 +43,10 @@ The source language is detected automatically; choose the target language in Set
 2. **[Download the latest release](https://github.com/HSoo-Kim/inline-translator/releases/latest)**, unzip `inline-translator-win-x64.zip` and run `InlineTranslator.exe`.
 3. Settings open on first launch. Use `Test` in Engines, choose languages and hotkeys in Translation, then `Save`.
 
+On Windows, the primary and fallback rows share the same model list; choosing a model also selects its engine. Codex models come from the local CLI cache. A listed model may not be available to your account, so use `Test` to check it.
+
+To reconnect an expired account, open `Engines` → `Accounts` and click `Sign in` or `Sign in again`. After completing sign-in, use that engine's `Test` button to confirm the connection.
+
 From then on it runs quietly in the notification area. Click the icon for Settings; right-click to pause or exit.
 
 Built for Windows 11 x64. The executable includes .NET, so nothing else to install. It is not code-signed yet, so Windows may warn on first launch.

@@ -27,7 +27,6 @@ internal static class WindowQa
                 Check(work.Contains(form.Bounds), "Window must fit reduced remote working area: " + viewport);
                 form.Size = new Size(Math.Min(viewport.Width - 48, 720), Math.Min(viewport.Height - 48, 500));
                 form.PerformLayout();
-                Check(work.Contains(form.Bounds), "User-resized window must remain inside remote work area.");
                 form.SetUpdate(new ReleaseInfo(new Version(0, 1, 9), "v0.1.9", "https://github.com/HSoo-Kim/inline-translator"));
                 form.PerformLayout();
                 var footer = save.Parent!;

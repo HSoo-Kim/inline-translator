@@ -57,6 +57,8 @@ internal static class Program
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => RecoveryQa.VerifyAsync(recoveryFolder)) : 2;
         if (args is ["settings-check", var settingsFolder])
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => SettingsQa.VerifyAsync(settingsFolder)) : 2;
+        if (args is ["account-model-check", var accountFolder])
+            return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => AccountModelQa.VerifyAsync(accountFolder)) : 2;
         if (args is ["shortcut-check", var shortcutFolder])
             return OperationQa.RequirePrivateDesktop() ? RunUiAsync(() => ShortcutQa.VerifyAsync(shortcutFolder)) : 2;
         if (args is ["update-check-qa", var updateFolder])

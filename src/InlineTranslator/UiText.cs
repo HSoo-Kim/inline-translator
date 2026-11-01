@@ -139,6 +139,15 @@ public sealed class UiText
         ["Checking…"] = ("확인 중…", "正在检查…", "確認中…"),
         ["How to install"] = ("설치 방법", "安装方法", "インストール方法"),
         ["Sign in"] = ("로그인", "登录", "サインイン"),
+        ["Sign in again"] = ("다시 로그인", "重新登录", "再サインイン"),
+        ["Choosing a model also selects its engine."] =
+            ("모델을 고르면 해당 엔진도 함께 선택됩니다.",
+             "选择模型时也会自动选择对应的引擎。",
+             "モデルを選ぶと対応するエンジンも選択されます。"),
+        ["After signing in, use Test to confirm the engine."] =
+            ("로그인한 뒤 테스트 버튼으로 엔진을 확인하세요.",
+             "登录后请使用“测试”确认引擎。",
+             "サインイン後、「テスト」でエンジンを確認してください。"),
         ["{0} needs you to sign in. Click here to sign in."] =
             ("{0} 로그인이 필요합니다. 여기를 누르면 로그인 창이 열립니다.",
              "{0} 需要登录。点击此处登录。",
