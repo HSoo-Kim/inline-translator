@@ -24,6 +24,40 @@ internal static class Program
             reader.ReadLine();
             return 0;
         }
+        if (args is ["early-exit-child"])
+        {
+            Console.Error.Write("rejected input");
+            return 7;
+        }
+        if (args is ["inherited-parent", var inheritedPipe])
+        {
+            var childInfo = SelfStartInfo("inherited-child", inheritedPipe, Environment.ProcessId.ToString());
+            // Force STARTF_USESTDHANDLES while leaving stdout and stderr inherited.
+            childInfo.RedirectStandardInput = true;
+            using var child = Process.Start(childInfo)!;
+            Console.Write("parent stdout\n");
+            Console.Error.Write("parent stderr\n");
+            return 0;
+        }
+        if (args is ["inherited-child", var childPipe, var parentId])
+        {
+            try
+            {
+                using var parent = Process.GetProcessById(int.Parse(parentId));
+                parent.WaitForExit(5000);
+            }
+            catch (ArgumentException) { /* Parent has already exited. */ }
+            using var client = new NamedPipeClientStream(".", childPipe, PipeDirection.InOut);
+            client.Connect(5000);
+            Console.Write("child stdout\n");
+            Console.Error.Write("child stderr\n");
+            using var writer = new StreamWriter(client, leaveOpen: true) { AutoFlush = true };
+            using var reader = new StreamReader(client, leaveOpen: true);
+            writer.WriteLine(Environment.ProcessId);
+            try { reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(8)).GetAwaiter().GetResult(); }
+            catch (TimeoutException) { }
+            return 0;
+        }
         var tests = new (string Name, Action Run)[]
         {
             ("hotkeys parse, normalize and format", HotkeyRoundtrip),
@@ -53,6 +87,10 @@ internal static class Program
             ("process runner passes stdin and returns exit codes", ProcessRoundtrip),
             ("process runner kills the CLI on timeout", ProcessTimeout),
             ("process runner cancels a running CLI and waits for its exit", ProcessCancellation),
+            ("process runner preserves early-exit stderr with broken stdin", ProcessEarlyExit),
+            ("process runner drains inherited output on normal completion", () => ProcessInheritedPipes("normal")),
+            ("process runner times out while inherited pipes remain open", () => ProcessInheritedPipes("timeout")),
+            ("process runner cancels while inherited pipes remain open", () => ProcessInheritedPipes("cancel")),
             ("release parsing accepts only verifiable GitHub packages", ReleaseParsing),
             ("update installer replaces the executable only after a SHA-256 match", UpdateInstall),
             ("every UI string is translated with matching placeholders", UiStrings),
@@ -628,6 +666,85 @@ internal static class Program
         Check(error.Message.Contains("PING", StringComparison.OrdinalIgnoreCase), "timeout names the CLI");
     }
 
+    private static ProcessStartInfo SelfStartInfo(params string[] arguments)
+    {
+        string exe = Environment.ProcessPath!;
+        var info = new ProcessStartInfo(exe) { UseShellExecute = false };
+        if (Path.GetFileNameWithoutExtension(exe).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+            info.ArgumentList.Add(typeof(Program).Assembly.Location);
+        foreach (string argument in arguments) info.ArgumentList.Add(argument);
+        return info;
+    }
+
+    private static void ProcessEarlyExit()
+    {
+        var info = SelfStartInfo("early-exit-child");
+        var result = ProcessRunner.RunAsync(info.FileName, info.ArgumentList, new string('x', 4 * 1024 * 1024),
+            TestDirectory, TimeSpan.FromSeconds(15), CancellationToken.None).GetAwaiter().GetResult();
+        Equal(7, result.ExitCode);
+        Equal("rejected input", result.Error);
+    }
+
+    private static void ProcessInheritedPipes(string mode) => ProcessInheritedPipesAsync(mode).GetAwaiter().GetResult();
+
+    private static async Task ProcessInheritedPipesAsync(string mode)
+    {
+        string name = "InlineTranslator-inherited-" + Guid.NewGuid().ToString("N");
+        using var pipe = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+        using var cancel = new CancellationTokenSource();
+        Task connected = pipe.WaitForConnectionAsync();
+        var info = SelfStartInfo("inherited-parent", name);
+        var clock = Stopwatch.StartNew();
+        Task<ProcessResult> run = ProcessRunner.RunAsync(info.FileName, info.ArgumentList, "", TestDirectory,
+            mode == "timeout" ? TimeSpan.FromSeconds(1) : TimeSpan.FromSeconds(30), cancel.Token);
+        Process? child = null;
+        try
+        {
+            await connected.WaitAsync(TimeSpan.FromSeconds(5));
+            using var reader = new StreamReader(pipe, leaveOpen: true);
+            using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
+            int pid = int.Parse((await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5)))!);
+            child = Process.GetProcessById(pid);
+            if (mode == "normal")
+            {
+                await writer.WriteLineAsync("release");
+                var result = await run.WaitAsync(TimeSpan.FromSeconds(5));
+                Equal(0, result.ExitCode);
+                Equal("parent stdout\nchild stdout\n", result.Output.Replace("\r\n", "\n"));
+                Equal("parent stderr\nchild stderr\n", result.Error.Replace("\r\n", "\n"));
+            }
+            else
+            {
+                if (mode == "cancel") cancel.Cancel();
+                try
+                {
+                    await run.WaitAsync(TimeSpan.FromSeconds(5));
+                    throw new InvalidOperationException("Inherited pipes unexpectedly returned a result.");
+                }
+                catch (OperationCanceledException) when (mode == "cancel") { }
+                catch (TimeoutException) when (mode == "timeout" && run.IsCompleted) { }
+                if (mode == "timeout") Check(clock.Elapsed < TimeSpan.FromSeconds(5), "inherited pipes timed out promptly");
+                Check(!child.HasExited, "descendant still holds the inherited pipes");
+            }
+        }
+        finally
+        {
+            cancel.Cancel();
+            if (child is not null)
+            {
+                try
+                {
+                    if (!child.HasExited) child.Kill();
+                    await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                }
+                finally { child.Dispose(); }
+            }
+            try { await run.WaitAsync(TimeSpan.FromSeconds(5)); }
+            catch (OperationCanceledException) { }
+            catch (TimeoutException) { }
+        }
+    }
+
     private static void ProcessCancellation() => ProcessCancellationAsync().GetAwaiter().GetResult();
 
     private static async Task ProcessCancellationAsync()
@@ -676,7 +793,6 @@ internal static class Program
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://github.com/a","assets":[{"name":"inline-translator-win-x64.zip","browser_download_url":"https://github.com/x"}]}""")!.PackageUrl is null, "no digest means no automatic install");
         Check(Parse("""{"tag_name":"v0.2.0","html_url":"https://evil.example/"}""") is null, "non-GitHub page rejected");
         Check(Parse("""{"tag_name":"latest","html_url":"https://github.com/a"}""") is null, "non-version tag rejected");
-        Equal(new Version(0, 1, 16), UpdateChecker.Current);
         Equal(300000, UpdateChecker.CheckIntervalMilliseconds);
     }
 

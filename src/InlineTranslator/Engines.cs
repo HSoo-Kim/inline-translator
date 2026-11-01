@@ -30,10 +30,22 @@ public static class ProcessRunner
         foreach (string argument in arguments) info.ArgumentList.Add(argument);
 
         using var process = Process.Start(info) ?? throw new InvalidOperationException("Could not start " + fileName);
-        var output = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
-        var error = process.StandardError.ReadToEndAsync(CancellationToken.None);
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(token);
         limit.CancelAfter(timeout);
+        using var inputStream = process.StandardInput.BaseStream;
+        var stdout = process.StandardOutput;
+        var stderr = process.StandardError;
+        var output = stdout.ReadToEndAsync(limit.Token);
+        var error = stderr.ReadToEndAsync(limit.Token);
+        var drain = Task.WhenAll(output, error);
+        // Process.Dispose does not close streams exposed to callers. Pending synchronous pipe
+        // reads may outlive cancellation, so dispose them once the reads actually complete.
+        _ = drain.ContinueWith(t =>
+        {
+            _ = t.Exception;
+            stdout.Dispose();
+            stderr.Dispose();
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         try
         {
             try
@@ -46,12 +58,16 @@ public static class ProcessRunner
                 // The CLI exited before reading its input (for example a bad flag); its exit code and stderr explain why.
             }
             await process.WaitForExitAsync(limit.Token);
+            // A descendant can keep inherited pipe handles open after the CLI itself exits.
+            await drain.WaitAsync(limit.Token);
         }
         catch (OperationCanceledException)
         {
-            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { /* The process already exited. */ }
             await process.WaitForExitAsync(CancellationToken.None);
-            await Task.WhenAll(output, error);
+            // Do not wait for inherited handles: descendants of an exited parent are no longer
+            // reliably identifiable as its children.
             token.ThrowIfCancellationRequested();
             throw new TimeoutException(
                 $"{Path.GetFileNameWithoutExtension(fileName)} did not answer within {timeout.TotalSeconds:0} seconds.");

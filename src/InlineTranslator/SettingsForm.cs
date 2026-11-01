@@ -47,6 +47,17 @@ internal sealed class SettingsForm : Form
     internal Panel ActiveScroller => pages[tabs.SelectedIndex < 0 ? 0 : tabs.SelectedIndex].Scroller;
     internal bool HasChanges { get; private set; }
     internal bool HasValidationErrors { get; private set; }
+    internal event Action<bool>? HotkeyRecordingChanged;
+
+    private void StopHotkeyRecording()
+    {
+        foreach (var (_, hotkey, _) in presets) hotkey.StopRecording();
+        readingHotkey.StopRecording();
+    }
+
+    private void WireHotkeyRecording(HotkeyBox hotkey) =>
+        hotkey.RecordingChanged += recording => HotkeyRecordingChanged?.Invoke(recording);
+
 
     public SettingsForm(AppSettings settings, UiText text, Icon icon, ReleaseInfo? update,
         Func<AppSettings, IReadOnlyList<string>> save, Func<Task> installUpdate, Action<string> changeLanguage,
@@ -75,6 +86,7 @@ internal sealed class SettingsForm : Form
         autoInstall = Toggle(text.T("Install automatically when Update is clicked"), "auto-install");
         readingHotkeyEnabled = Toggle(text.T("Read-only translation hotkey"), "reading-enabled");
         readingHotkey = new HotkeyBox(text) { Name = "reading-hotkey", AccessibleName = text.T("Read-only translation hotkey") };
+        WireHotkeyRecording(readingHotkey);
         primary = new EngineRow("primary", text.T("Primary"), false, text, this);
         fallback = new EngineRow("fallback", text.T("If it fails"), true, text, this);
         foreach (var engine in new[] { primary, fallback })
@@ -108,11 +120,13 @@ internal sealed class SettingsForm : Form
 
         var writingCard = Card(text.T("Hotkeys and target languages"),
             text.T("Select text and press a hotkey: it is replaced with the translation in place."));
+        writingCard.Controls.Add(Note(HotkeyBox.RecordingInstruction(text)));
         for (int i = 0; i < AppSettings.PresetCount; i++)
         {
             int index = i;
             var enabled = Toggle(text.T("Writing hotkey {0}", i + 1), $"preset-{i}-enabled");
             var hotkey = new HotkeyBox(text) { Name = $"preset-{i}-hotkey", AccessibleName = text.T("Writing hotkey {0}", i + 1) };
+            WireHotkeyRecording(hotkey);
             var language = Dropdown($"preset-{i}-language");
             language.SetOptions(Languages.All.Select(item => ((object)item.Code, item.ToString())));
             var group = new FluidStack { Margin = new Padding(0, 8, 0, 8) };
@@ -136,6 +150,7 @@ internal sealed class SettingsForm : Form
         translation.Controls.Add(writingCard);
 
         var readingCard = Card(text.T("Read-only translation hotkey"));
+        readingCard.Controls.Add(Note(HotkeyBox.RecordingInstruction(text)));
         readingCard.Controls.Add(readingHotkeyEnabled);
         readingCard.Controls.Add(Row(text.T("Hotkey"), HotkeyField(readingHotkey)));
         readingLanguage.SetOptions(Languages.All.Select(language => ((object)language.Code, language.ToString())));
@@ -277,6 +292,10 @@ internal sealed class SettingsForm : Form
         loading = false;
         RefreshDraftState();
         SetUpdate(update);
+        Deactivate += (_, _) => StopHotkeyRecording();
+        Resize += (_, _) => { if (WindowState == FormWindowState.Minimized) StopHotkeyRecording(); };
+        FormClosed += (_, _) => StopHotkeyRecording();
+        Disposed += (_, _) => StopHotkeyRecording();
         Shown += async (_, _) => await (InitialSignIn = RefreshSignInAsync());
     }
 
@@ -538,6 +557,7 @@ internal sealed class SettingsForm : Form
 
     private void Save()
     {
+        StopHotkeyRecording();
         RefreshDraftState();
         if (!saveButton.Enabled) return;
         var updated = Collect();
@@ -752,6 +772,8 @@ internal sealed class SettingsForm : Form
 internal sealed class HotkeyBox : TextBox
 {
     private readonly UiText text;
+    private bool recording;
+    internal event Action<bool>? RecordingChanged;
 
     public HotkeyBox(UiText text)
     {
@@ -763,18 +785,62 @@ internal sealed class HotkeyBox : TextBox
         TextAlign = HorizontalAlignment.Center;
         Font = Ui.Bold();
         Cursor = Cursors.Hand;
+        AccessibleDescription = RecordingInstruction(text);
     }
+
+    internal static string RecordingInstruction(UiText text) => text.Language switch
+    {
+        "ko" => "단축키를 기록하려면 단축키 필드를 클릭하거나 포커스를 둔 후 Enter를 누르세요.",
+        "zh-CN" => "点击快捷键输入框，或将焦点移至输入框后按 Enter，即可录入快捷键。",
+        "ja" => "ショートカットを記録するには、欄をクリックするか、欄にフォーカスして Enter を押してください。",
+        _ => "Click a hotkey field, or focus it and press Enter, to record a shortcut.",
+    };
 
     public string Draft => Text == text.T("Press a key combination") ? "" : Text;
     public Hotkey? GetHotkey() => Hotkey.TryParse(Draft, out var value) ? value : null;
     public void SetHotkey(Hotkey? value) => SetDraft(value?.ToString() ?? "");
     public void SetDraft(string value) => Text = value.Length > 0 ? value : text.T("Press a key combination");
 
+    private void StartRecording()
+    {
+        if (recording) return;
+        recording = true;
+        BackColor = Ui.AccentSoft;
+        AccessibleDescription = text.T("Press a key combination");
+        RecordingChanged?.Invoke(true);
+    }
+
+    internal void StopRecording()
+    {
+        if (!recording) return;
+        recording = false;
+        BackColor = Ui.Card;
+        AccessibleDescription = RecordingInstruction(text);
+        RecordingChanged?.Invoke(false);
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        if (e.Button == MouseButtons.Left) StartRecording();
+    }
+
+    protected override void OnLeave(EventArgs e)
+    {
+        StopRecording();
+        base.OnLeave(e);
+    }
+
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
         Keys key = keyData & Keys.KeyCode;
         Keys modifiers = keyData & Keys.Modifiers;
         if (key == Keys.Tab && (modifiers == Keys.None || modifiers == Keys.Shift)) return base.ProcessCmdKey(ref msg, keyData);
+        if (!recording)
+        {
+            if (key == Keys.Enter && modifiers == Keys.None) StartRecording();
+            return true;
+        }
         if (modifiers == Keys.None && key is Keys.Back or Keys.Delete or Keys.Escape)
         {
             SetHotkey(null);

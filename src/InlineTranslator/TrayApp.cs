@@ -29,7 +29,7 @@ internal sealed class TrayApp : ApplicationContext
     private AppSettings settings;
     private SettingsForm? settingsForm;
     private ReleaseInfo? update;
-    private bool busy, installing, checkingUpdates;
+    private bool busy, installing, checkingUpdates, recordingHotkey;
     internal Task CurrentUpdateCheck { get; private set; } = Task.CompletedTask;
     internal Task CurrentTranslation { get; private set; } = Task.CompletedTask;
     internal ContextMenuStrip TrayMenu => tray.ContextMenuStrip!;
@@ -46,7 +46,11 @@ internal sealed class TrayApp : ApplicationContext
         translator = new Translator(runEngine ?? EngineCli.TranslateAsync);
         text = new UiText(settings.UiLanguage);
         hotkeys = new HotkeyWindow(activationMessage);
-        hotkeys.HotkeyPressed += id => CurrentTranslation = TranslateActiveAsync(id - 1, reading: id == ReadingHotkeyId);
+        hotkeys.HotkeyPressed += id =>
+        {
+            if (!recordingHotkey && !pauseItem.Checked)
+                CurrentTranslation = TranslateActiveAsync(id - 1, reading: id == ReadingHotkeyId);
+        };
         hotkeys.ActivationRequested += ShowSettings;
 
         var menu = new ContextMenuStrip { Renderer = new RoundMenuRenderer(), Font = Ui.Regular() };
@@ -111,7 +115,7 @@ internal sealed class TrayApp : ApplicationContext
     {
         hotkeys.UnregisterAll();
         var failed = new List<string>();
-        if (!pauseItem.Checked)
+        if (!pauseItem.Checked && !recordingHotkey)
         {
             for (int i = 0; i < settings.Presets.Count; i++)
             {
@@ -133,12 +137,19 @@ internal sealed class TrayApp : ApplicationContext
     {
         if (settingsForm is { IsDisposed: false })
         {
+            if (settingsForm.WindowState == FormWindowState.Minimized)
+                settingsForm.WindowState = FormWindowState.Normal;
             settingsForm.Activate();
             _ = RequestUpdateCheck();
             return;
         }
         settingsForm = new SettingsForm(settings, text, icon, update, SaveSettings, InstallUpdateAsync, ChangeDisplayLanguage,
             checkUpdates: () => RequestUpdateCheck(manual: true));
+        settingsForm.HotkeyRecordingChanged += recording =>
+        {
+            recordingHotkey = recording;
+            ApplyHotkeys(notify: !recording);
+        };
         settingsForm.FormClosed += (_, _) => settingsForm = null;
         settingsForm.Show();
         settingsForm.Activate();

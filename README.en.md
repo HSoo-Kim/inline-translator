@@ -100,6 +100,8 @@ Drag the window borders to resize Settings, or maximize it. On small or remote d
 
 Three tabs organize settings: Translation, Engines and General. Switching tabs keeps pending edits. Narrow windows stack fields without horizontal scrolling. Hotkey errors appear under the field; each engine has its own test progress and result. Save enables only when settings have changed and validation passes.
 
+On Windows, click a hotkey field or focus it and press Enter to record a shortcut. This app's translation hotkeys are temporarily unregistered while recording and registered again when you leave the field or window. Manual pause remains in effect; a warning appears if another app has taken a shortcut.
+
 <p align="center"><img src="docs/images/settings-en.png" width="520" alt="Inline Translator settings window"></p>
 
 | Tab | Contents |
@@ -125,6 +127,7 @@ Interface language applies with Save rather than discarding other edits when a l
 - **Reading formats**: the app translates selected text supplied by the viewer, not the file itself. Text-layer PDFs, web pages, TXT/Markdown, office documents and email work when their apps allow copying text. Unicode/plain text and RTF-only copies are supported; image-only scans and copy-protected text are not. There is no OCR or whole-file conversion.
 - **PDF**: select actual text and press `Ctrl+Alt+R`; the editing toolbar does not need to be closed first. Slow PDF copying is allowed up to two seconds.
 - **Writing**: selection copying and verification allow up to two seconds in slower editors, while listed chat apps retain the fast no-selection probe. Output is plain text, not a document-format or spreadsheet-layout conversion. Paste rechecks focus after publishing the clipboard; unsupported clipboard contents that cannot be preserved stop the operation before copying.
+- **Engine timeout**: translation and output collection have a 60-second limit. A descendant left running after the engine exits may not be stopped automatically on cancellation or timeout.
 - Tested with Claude Code 2.1.300 and Codex CLI 0.153.2. Much older versions may lack some options.
 - Some apps (code editors, for example) copy the whole line when you press `Ctrl+C` with nothing selected. Select the text first there.
 - Windows does not allow pasting into windows running as administrator.
