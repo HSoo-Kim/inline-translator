@@ -115,9 +115,15 @@ final class SettingsModel: ObservableObject {
                 let seconds = String(format: "%.1f", Date().timeIntervalSince(started))
                 tests[slot] = EngineTest(state: .succeeded,
                                          message: text.t("Test succeeded · {0} · {1}s\n{2}", engine.displayName, seconds, result.text))
+                let wasFailing = self.app?.signInFailures.contains(engine.provider) == true
+                self.app?.noteEngineResult(engine.provider, signInFailed: false)
+                if wasFailing { refreshSignIn() }
             } catch let failure as TranslationFailed {
                 tests[slot] = EngineTest(state: .failed, message: text.t("Test failed · {0}", failure.localizedDescription))
-                if EngineCli.isSignInError(failure.primary) { refreshSignIn() }
+                if EngineCli.isSignInError(failure.primary) {
+                    self.app?.noteEngineResult(engine.provider, signInFailed: true)
+                    refreshSignIn()
+                }
             } catch {
                 tests[slot] = EngineTest(state: .failed, message: text.t("Test failed · {0}", error.localizedDescription))
             }
@@ -137,7 +143,10 @@ final class SettingsModel: ObservableObject {
             async let claude = EngineCli.checkSignIn(.claude, environment: environment)
             async let codex = EngineCli.checkSignIn(.codex, environment: environment)
             let (claudeState, codexState) = await (claude, codex)
-            signIn = [.claude: claudeState, .codex: codexState]
+            // The CLI's own status can still say "signed in" after its login expired; a failed request knows better.
+            let failed = self.app?.signInFailures ?? []
+            signIn = [.claude: failed.contains(.claude) && claudeState == .signedIn ? .signedOut : claudeState,
+                      .codex: failed.contains(.codex) && codexState == .signedIn ? .signedOut : codexState]
             signInTask = nil
             if refreshQueued {
                 refreshQueued = false

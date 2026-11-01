@@ -34,6 +34,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var currentUpdateCheck: Task<Void, Never>?
     private var operation: Task<Void, Never>?
     private var signInReminded = Set<Provider>()
+    /// Engines whose last real request failed for sign-in reasons. A CLI can still call an expired login "signed in"
+    /// (`codex login status` does), so Settings shows these as needing sign-in until a request succeeds again.
+    private(set) var signInFailures = Set<Provider>()
 
     init(settingsURL: URL, settings: AppSettings, firstRun: Bool) {
         self.settingsURL = settingsURL
@@ -82,6 +85,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.autoenablesItems = false
         statusItem.menu = menu
 
+        warnIfNotInstalled()
         hotkeys.onPress = { [weak self] id in self?.hotkeyPressed(id) }
         applyHotkeys(notify: true)
         Task {
@@ -98,6 +102,20 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             showSettings()
             toast.show(text.t("Inline Translator is running in the menu bar. Select text and press {0}.", firstHotkey), kind: .info)
         }
+    }
+
+    /// Opened straight from the disk image (or from a copy macOS moved to a temporary place), the app cannot update
+    /// itself or open at login, so ask for the usual drag into Applications first.
+    private func warnIfNotInstalled() {
+        let path = Bundle.main.bundlePath
+        guard path.hasPrefix("/Volumes/") || path.contains("/AppTranslocation/") else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = text.t("Move Inline Translator to Applications")
+        alert.informativeText = text.t("It is running from the disk image or a temporary copy, so it cannot update itself or open at login. Quit, drag Inline Translator into the Applications folder, and open it from there.")
+        alert.addButton(withTitle: text.t("Quit"))
+        alert.addButton(withTitle: text.t("Continue Anyway"))
+        if alert.runModal() == .alertFirstButtonReturn { NSApp.terminate(nil) }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -308,7 +326,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let result = try await translator().translate(settings, target: target, text: source, context: context)
             try Task.checkCancellation()
             indicator.hide()
+            signInFailures.remove(result.engine.provider)
             if let primaryError = result.primaryError {
+                if EngineCli.isSignInError(primaryError) { signInFailures.insert(settings.primary.provider) }
                 ErrorLog.write("\(settings.primary.displayName) failed, used \(result.engine.displayName)", primaryError)
                 if EngineCli.isSignInError(primaryError), signInReminded.insert(settings.primary.provider).inserted {
                     notifySignIn(settings.primary.provider, text.t("{0} needs you to sign in again, so {1} translated this. Click here to sign in to {0}.",
@@ -353,6 +373,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if let fallback = failure.fallback { ErrorLog.write(settings.fallback.displayName + " failed", fallback) }
             let provider: Provider = EngineCli.isSignInError(failure.primary) ? settings.primary.provider
                 : failure.fallback.map(EngineCli.isSignInError) == true ? settings.fallback.provider : .none
+            if EngineCli.isSignInError(failure.primary) { signInFailures.insert(settings.primary.provider) }
+            if let fallback = failure.fallback, EngineCli.isSignInError(fallback) { signInFailures.insert(settings.fallback.provider) }
             if provider != .none {
                 notifySignIn(provider, text.t("{0} needs you to sign in. Click here to sign in.", EngineCli.productName(provider)))
             } else {
@@ -394,6 +416,13 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func startSignIn(_ provider: Provider) throws {
         try SignInTerminal.open(provider, environment: environment)
         signInReminded.remove(provider)
+        signInFailures.remove(provider)
+    }
+
+    /// Results of the engine test in Settings count like translations.
+    func noteEngineResult(_ provider: Provider, signInFailed: Bool?) {
+        guard let signInFailed else { return }
+        if signInFailed { signInFailures.insert(provider) } else { signInFailures.remove(provider) }
     }
 
     private func notifySignIn(_ provider: Provider, _ message: String) {

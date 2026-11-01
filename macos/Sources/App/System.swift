@@ -41,12 +41,21 @@ enum Accessibility {
         element(attribute(application(pid), kAXFocusedWindowAttribute))
     }
 
-    /// Read-only only when the app says so: static text or a web page whose selection cannot be edited.
-    /// Anything unknown counts as editable, so pasting stays the default (Mail compose is an editable web area).
+    /// Read-only only when the app says so: static text or a web page whose selection cannot be edited, or a PDF
+    /// document (pages of static text). Pasting into a PDF in Preview would at best do nothing and at worst add an
+    /// annotation, so PDFs always get the bubble. Anything unknown counts as editable (Mail compose is a web area).
     static func isReadOnly(_ element: AXUIElement?) -> Bool {
-        guard let element, let role = attribute(element, kAXRoleAttribute) as? String,
-              role == kAXStaticTextRole || role == "AXWebArea" else { return false }
+        guard let element, let role = attribute(element, kAXRoleAttribute) as? String else { return false }
+        if isPDFDocument(element, role: role) { return true }
+        guard role == kAXStaticTextRole || role == "AXWebArea" else { return false }
         return !settable(element, kAXSelectedTextAttribute) && !settable(element, kAXValueAttribute)
+    }
+
+    static func isPDFDocument(_ element: AXUIElement, role: String) -> Bool {
+        guard role == kAXGroupRole || role == "AXPage" else { return false }
+        if role == "AXPage" { return true }
+        let pages = attribute(element, "AXVisibleChildren") as? [AXUIElement] ?? attribute(element, kAXChildrenAttribute) as? [AXUIElement]
+        return pages?.first.map { attribute($0, kAXRoleAttribute) as? String == "AXPage" } ?? false
     }
 
     private static func settable(_ element: AXUIElement, _ name: String) -> Bool {
@@ -105,7 +114,56 @@ enum Accessibility {
                 return context
             }
         }
-        return webContext(element, selected: selected)
+        if attribute(element, kAXRoleAttribute) as? String == "AXWebArea" { return webContext(element, selected: selected) }
+        // Follow only the selection's ancestors. Searching the whole window could attach PDF text to a
+        // selection in an unrelated control, such as Preview's Find field.
+        var node: AXUIElement? = element
+        let deadline = Date().addingTimeInterval(0.5)
+        for _ in 0..<10 {
+            guard let current = node, Date() < deadline, !Task.isCancelled else { break }
+            let role = attribute(current, kAXRoleAttribute) as? String ?? ""
+            if isPDFDocument(current, role: role) { return pageContext(current, selected: selected) }
+            if role == kAXWindowRole { break }
+            node = self.element(attribute(current, kAXParentAttribute))
+        }
+        return nil
+    }
+
+    /// PDF viewers such as Preview report only the selected text on the focused document, and list each page as
+    /// one static text per line. Read the lines of the pages on screen and find the selection among them.
+    private static func pageContext(_ element: AXUIElement, selected: String) -> TranslationContext? {
+        var lines: [String] = [], length = 0, budget = 4000
+        let textLimit = 200_000, deadline = Date().addingTimeInterval(0.5)
+        var hint: Int?
+        let names = [kAXRoleAttribute, kAXValueAttribute, kAXSelectedTextRangeAttribute, kAXChildrenAttribute] as CFArray
+        func visit(_ node: AXUIElement, _ depth: Int) {
+            guard depth < 14, budget > 0, length < textLimit, Date() < deadline, !Task.isCancelled else { return }
+            budget -= 1
+            var values: CFArray?
+            guard AXUIElementCopyMultipleAttributeValues(node, names, [], &values) == .success,
+                  let list = values as? [AnyObject], list.count == 4 else { return }
+            if list[0] as? String == kAXStaticTextRole, let text = list[1] as? String {
+                let count = (text as NSString).length
+                guard count < textLimit - length else { budget = 0; return }
+                var range = CFRange()
+                if hint == nil, CFGetTypeID(list[2]) == AXValueGetTypeID(), AXValueGetValue(list[2] as! AXValue, .cfRange, &range),
+                   range.location >= 0, range.location != NSNotFound, range.length > 0 {
+                    hint = length + range.location
+                }
+                lines.append(text)
+                length += count + 1
+                return
+            }
+            // Only the pages on screen: a long document has many more, and the selection is on one of these.
+            let visible = depth == 0 ? attribute(node, "AXVisibleChildren") as? [AXUIElement] : nil
+            for child in visible ?? list[3] as? [AXUIElement] ?? [] {
+                guard budget > 0, length < textLimit, Date() < deadline, !Task.isCancelled else { break }
+                visit(child, depth + 1)
+            }
+        }
+        visit(element, 0)
+        guard !lines.isEmpty else { return nil }
+        return ContextWindow.around(page: lines.joined(separator: "\n"), selected: selected, near: hint)
     }
 
     private static func webContext(_ element: AXUIElement, selected: String) -> TranslationContext? {

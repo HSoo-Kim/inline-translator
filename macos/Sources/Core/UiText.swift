@@ -72,6 +72,13 @@ final class UiText: ObservableObject {
         "Pause hotkeys": ("단축키 일시 중지", "暂停快捷键", "ショートカットを一時停止"),
         "Paused": ("일시 중지됨", "已暂停", "一時停止中"),
         "Quit Inline Translator": ("Inline Translator 종료", "退出 Inline Translator", "Inline Translator を終了"),
+        "Quit": ("종료", "退出", "終了"),
+        "Continue Anyway": ("그대로 계속", "仍然继续", "このまま続ける"),
+        "Move Inline Translator to Applications": ("Inline Translator를 응용 프로그램 폴더로 옮겨 주세요", "请将 Inline Translator 移到“应用程序”文件夹", "Inline Translator を「アプリケーション」フォルダーに移動してください"),
+        "It is running from the disk image or a temporary copy, so it cannot update itself or open at login. Quit, drag Inline Translator into the Applications folder, and open it from there.":
+            ("디스크 이미지나 임시 위치에서 실행 중이라 자동 업데이트와 로그인 시 열기를 쓸 수 없습니다. 종료한 뒤 Inline Translator를 응용 프로그램 폴더로 끌어 놓고 거기서 여세요.",
+             "它正从磁盘映像或临时位置运行，因此无法自动更新或在登录时打开。请退出，将 Inline Translator 拖到“应用程序”文件夹，然后从那里打开。",
+             "ディスクイメージまたは一時的な場所から実行されているため、自動更新とログイン時に開く機能を使えません。終了して Inline Translator を「アプリケーション」フォルダーにドラッグし、そこから開いてください。"),
         "Update to {0}": ("{0}(으)로 업데이트", "更新到 {0}", "{0} に更新"),
         "Update": ("업데이트", "更新", "更新"),
         "Check for updates": ("지금 업데이트 확인", "立即检查更新", "今すぐ更新を確認"),

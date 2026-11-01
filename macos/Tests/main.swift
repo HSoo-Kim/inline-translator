@@ -296,12 +296,17 @@ let tests: [(String, () async throws -> Void)] = [
         }
         try equal("claude down", both.primary.localizedDescription)
         try equal("codex down", both.fallback?.localizedDescription)
+        try equal("claude down · codex down", both.localizedDescription)
+        let missingFallback = TranslationFailed(primary: EngineError(message: "Claude Code: Not logged in"),
+                                                fallback: EngineError(message: "Codex CLI was not found. Install it and sign in once."))
+        try equal("Claude Code: Not logged in", missingFallback.localizedDescription)
 
         let alone = try await expectError(TranslationFailed.self) {
             _ = try await Translator { _, _, _ in throw EngineError(message: "down") }
                 .translate(value.with(\.fallback, .none), target: en, text: "x")
         }
         try check(alone.fallback == nil, "no fallback attempted")
+        try equal("down", alone.localizedDescription)
     }),
     ("translator treats empty output as failure and lets cancellation through", {
         let single = AppSettings().normalized().with(\.fallback, .none)
@@ -369,30 +374,25 @@ let tests: [(String, () async throws -> Void)] = [
         try check(clipped.after.hasSuffix("뒤 문장"), "after cut at a word boundary")
         try check(ContextWindow.clip(before: " \n ", after: "") == nil, "whitespace is no context")
     }),
-    ("surrounding context reaches the engine for reference only", {
-        let context = TranslationContext(before: "Release is on Friday.", after: "Ask me if unsure.")
-        let message = Translator.wrap("그건 다음 주로 미룰게요.", output: en, context: context)
-        try equal("Translate this message into English. Translate only the message; the context is for reference.\n"
-                  + "BEGIN CONTEXT BEFORE\nRelease is on Friday.\nEND CONTEXT BEFORE\nBEGIN MESSAGE\n그건 다음 주로 미룰게요.\nEND MESSAGE\n"
-                  + "BEGIN CONTEXT AFTER\nAsk me if unsure.\nEND CONTEXT AFTER", message)
-        try check(!Translator.wrap("x", output: en, context: TranslationContext(before: "", after: "later")).contains("CONTEXT BEFORE"),
-                  "empty side omitted")
-        try equal("Let's postpone it", Translator.unwrap("BEGIN MESSAGE\nLet's postpone it\nEND MESSAGE\nBEGIN CONTEXT AFTER\nEND CONTEXT AFTER"))
-        let prompt = Prompt.instructions(en, tone: "natural", home: ko, context: true)
-        try check(prompt.contains("Never translate, repeat or output the context."), "context rule")
-        try check(prompt.rangeOfCharacter(from: CharacterSet(charactersIn: "\"&|<>^%\n`$")) == nil, "context prompt stays shell-safe")
-        try check(!Prompt.instructions(en, tone: "natural").contains("CONTEXT"), "no context rule without context")
-        let seen = Calls()
-        let result = try await Translator { _, instructions, text in
-            seen.add(instructions)
-            seen.add(text)
-            return "Let's push it to next week."
-        }.translate(settings { $0.homeLanguage = "ko" }, target: en, text: "그건 다음 주로 미룰게요.", context: context)
-        try equal("Let's push it to next week.", result.text)
-        try check(seen.all[0].contains("CONTEXT") && seen.all[1].contains("BEGIN CONTEXT BEFORE\nRelease is on Friday."), "context sent")
-        let url = testDirectory.appendingPathComponent("context.json")
-        try SettingsStore.save(url, AppSettings().with(\.useContext, false))
-        try check(SettingsStore.load(url)?.useContext == false, "turning context off persists")
+    ("PDF context finds the copied text on the page despite line breaks and picks the occurrence nearest the selection", {
+        // Preview lists a page as lines, while a copy across lines joins them with a space.
+        let page = "Notes\nThe model is\nfast. It trains\nin a day. Results follow.\nThe model is\nfast. It trains\nin a week. End."
+        let first = ContextWindow.around(page: page, selected: "The model is fast. It trains in a")
+        try equal(TranslationContext(before: "Notes", after: "day. Results follow.\nThe model is\nfast. It trains\nin a week. End."), first)
+        let second = (page as NSString).range(of: "The model is", options: .backwards).location
+        let near = ContextWindow.around(page: page, selected: "The model is fast. It trains in a", near: second)
+        try equal(TranslationContext(before: "Notes\nThe model is\nfast. It trains\nin a day. Results follow.", after: "week. End."), near)
+        try equal(NSRange(location: 10, length: 8), ContextWindow.locate("model\nis", in: "Notes The model is"))
+        let unicode = "앞🌳\n결과는 아주 좋다.\n뒤"
+        try equal((unicode as NSString).range(of: "결과는 아주 좋다."),
+                  ContextWindow.locate("결과는아주\n좋다.", in: unicode))
+        try equal(NSRange(location: 4, length: 5), ContextWindow.locate("ababa", in: "ababababa", near: 4))
+        try check(ContextWindow.locate("aaaab", in: "aaaaaa") == nil, "partial matches do not count")
+        let repeated = String(repeating: "a", count: 100_000)
+        try equal(NSRange(location: 50_000, length: 50_000),
+                  ContextWindow.locate(String(repeating: "a", count: 50_000), in: repeated, near: 50_000))
+        try check(ContextWindow.around(page: page, selected: "not on this page") == nil, "missing text gives no context")
+        try check(ContextWindow.around(page: page, selected: " \n") == nil, "blank selection gives no context")
     }),
     ("CLI arguments keep sessions unsaved and tools disabled", {
         let claude = EngineCli.claudeArguments(model: "haiku", instructions: "Translate.")

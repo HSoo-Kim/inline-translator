@@ -142,7 +142,13 @@ struct TranslationResult {
 struct TranslationFailed: LocalizedError {
     let primary: Error
     let fallback: Error?
-    var errorDescription: String? { (fallback ?? primary).localizedDescription }
+    /// Both engines' reasons, primary first. A fallback that is simply not installed adds nothing, so it is left out.
+    var errorDescription: String? {
+        guard let fallback, !(fallback is EngineError && fallback.localizedDescription.contains("was not found")) else {
+            return primary.localizedDescription
+        }
+        return primary.localizedDescription + " · " + fallback.localizedDescription
+    }
 }
 
 struct EmptyTranslation: LocalizedError {

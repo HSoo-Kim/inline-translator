@@ -16,6 +16,58 @@ enum ContextWindow {
         let full = text as NSString
         guard selection.location != NSNotFound, NSMaxRange(selection) <= full.length,
               same(full.substring(with: selection), selected) else { return nil }
+        return slice(full, selection)
+    }
+
+    /// Context around the copied text found inside the text of a whole page, for viewers that only report the
+    /// selected text itself (PDF pages in Preview). Spaces and line breaks are ignored while matching because a PDF
+    /// copy joins lines differently from how the page lists them; `near` picks between repeated occurrences.
+    static func around(page: String, selected: String, near hint: Int? = nil) -> TranslationContext? {
+        guard let range = locate(selected, in: page, near: hint) else { return nil }
+        return slice(page as NSString, range)
+    }
+
+    static func locate(_ selected: String, in text: String, near hint: Int? = nil) -> NSRange? {
+        func isSpace(_ unit: unichar) -> Bool {
+            UnicodeScalar(unit).map(CharacterSet.whitespacesAndNewlines.contains) ?? false
+        }
+        let needle = selected.utf16.filter { !isSpace($0) }
+        guard !needle.isEmpty else { return nil }
+        // KMP keeps repeated text linear-time. Keep only the last needle.count offsets to map each match
+        // back to the original UTF-16 range, including the spaces and line breaks within it.
+        var prefix = [Int](repeating: 0, count: needle.count)
+        var matched = 0
+        for index in 1..<needle.count {
+            while matched > 0 && needle[index] != needle[matched] { matched = prefix[matched - 1] }
+            if needle[index] == needle[matched] { matched += 1 }
+            prefix[index] = matched
+        }
+        var positions = [Int](repeating: 0, count: needle.count)
+        var count = 0, bestDistance = Int.max
+        var best: NSRange?
+        let hint = hint.map { max(0, $0) }
+        matched = 0
+        for (offset, unit) in text.utf16.enumerated() {
+            if offset & 1023 == 0, Task.isCancelled { return nil }
+            if isSpace(unit) { continue }
+            positions[count % needle.count] = offset
+            while matched > 0 && unit != needle[matched] { matched = prefix[matched - 1] }
+            if unit == needle[matched] { matched += 1 }
+            if matched == needle.count {
+                let start = positions[(count + 1 - needle.count) % needle.count]
+                let range = NSRange(location: start, length: offset + 1 - start)
+                guard let hint else { return range }
+                let distance = abs(start - hint)
+                if distance < bestDistance { best = range; bestDistance = distance }
+                if start >= hint { return best }
+                matched = prefix[matched - 1]
+            }
+            count += 1
+        }
+        return best
+    }
+
+    private static func slice(_ full: NSString, _ selection: NSRange) -> TranslationContext? {
         let start = max(0, selection.location - maxBefore - 1)
         let end = min(full.length, NSMaxRange(selection) + maxAfter + 1)
         return clip(before: full.substring(with: NSRange(location: start, length: selection.location - start)),
